@@ -1,12 +1,13 @@
 # Data Science
 import numpy as np
+import sklearn.metrics as skm
 # PyTorch
 import torch
 
 
 # TODO: Move this into Metric
 def predict(logits, threshold):
-    """Thresholding logits for binary prediction"""
+    """Thresholding X for binary prediction"""
     logits_copy = np.copy(logits)
     preds = (logits_copy > threshold).astype('uint8')
     return preds
@@ -33,15 +34,25 @@ def metric(probability, truth, threshold=0.5, reduction='none'):
         t_sum = t.sum(-1)
         p_sum = p.sum(-1)
         # Shape: [N, 1]
-        neg_index = torch.nonzero(t_sum == 0)
         pos_index = torch.nonzero(t_sum >= 1)
 
         # Shape: [N, 1]
-        dice_neg = (p_sum == 0).float()
         dice_pos = 2 * (p * t).sum(-1) / ((p + t).sum(-1))
+    return dice_pos
 
-        dice = torch.cat([dice_pos, dice_neg])
-    return dice
+
+def computer_acc_batch(outputs, labels):
+    #     from IPython.core.debugger import set_trace
+    #     set_trace()
+    accs = []
+    preds = np.copy(outputs)  # copy is important
+    labels = np.array(labels)  # Tensor to ndarray
+    for pred, label in zip(preds, labels):
+        accs.append(skm.accuracy_score(label.flatten(),
+                                       pred.flatten(),
+                                       normalize=True))
+    acc = np.nanmean(accs)
+    return acc
 
 
 class Meter:
@@ -51,27 +62,33 @@ class Meter:
         self.base_threshold = 0.5  # <<<< Change: Hardcoded threshold
         self.base_dice_scores = []
         self.iou_scores = []
+        self.acc_scores = []
 
     def update(self, targets, outputs):
         probs = torch.sigmoid(outputs)
         dice = metric(probs, targets, self.base_threshold)
         self.base_dice_scores.extend(dice)
+
         preds = predict(probs, self.base_threshold)
         iou = compute_iou_batch(preds, targets, classes=[1])
         self.iou_scores.append(iou)
 
+        acc = computer_acc_batch(preds, targets)  # <<< TODO: Test this
+        self.acc_scores.append(acc)
+
     def get_metrics(self):
         dice = np.nanmean(self.base_dice_scores)
         iou = np.nanmean(self.iou_scores)
-        return dice, iou
+        acc = np.nanmean(self.acc_scores)
+        return dice, iou, acc  # <<< TODO: Return metrics as a dict
 
 
 # TODO: Move this into the trainer
 def epoch_log(phase, epoch, epoch_loss, meter, start):
     """Logging the metrics at the end of an epoch."""
-    dice, iou = meter.get_metrics()
-    print("Loss: %0.4f | dice: %0.4f | IoU: %0.4f" % (epoch_loss, dice, iou))
-    return dice, iou
+    dice, iou, acc = meter.get_metrics()
+    print("Loss: %0.4f | dice: %0.4f | IoU: %0.4f | Acc: %0.4f" % (epoch_loss, dice, iou, acc))
+    return dice, iou, acc
 
 
 # TODO: Find a place for this
