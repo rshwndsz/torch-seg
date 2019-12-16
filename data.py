@@ -6,13 +6,8 @@ import cv2
 import torch
 from torch.utils.data import DataLoader, Dataset, sampler
 # Data augmentation
-from albumentations import (IAAPerspective, ShiftScaleRotate, CLAHE, RandomRotate90,
-                            Transpose, ShiftScaleRotate, Blur, OpticalDistortion,
-                            GridDistortion, HueSaturationValue,
-                            IAAAdditiveGaussianNoise, GaussNoise, MotionBlur, MedianBlur,
-                            IAAPiecewiseAffine, IAASharpen, IAAEmboss, RandomBrightnessContrast,
-                            Flip, OneOf, Compose, Normalize, RandomSizedCrop, ElasticTransform,
-                            MultiplicativeNoise, JpegCompression)
+from albumentations.augmentations import transforms as T
+from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
 
 # Root folder of dataset
@@ -86,37 +81,37 @@ def get_transforms(phase):
     if phase == "train":
         # Data augmentation for training only
         aug_transforms.extend([
-            ShiftScaleRotate(
+            T.ShiftScaleRotate(
                 shift_limit=0,
                 scale_limit=0.1,
                 rotate_limit=15,
                 p=0.5),
-            Flip(p=0.5),
-            RandomRotate90(p=0.5),
+            T.Flip(p=0.5),
+            T.RandomRotate90(p=0.5),
         ])
         # Exotic Augmentations for train only 🤤
         aug_transforms.extend([
-            RandomBrightnessContrast(p=0.5),
-            ElasticTransform(p=0.5),
-            MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
-            JpegCompression(quality_lower=95, quality_upper=100, p=0.4),
-            Blur(blur_limit=7, p=0.3),
+            T.RandomBrightnessContrast(p=0.5),
+            T.ElasticTransform(p=0.5),
+            T.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
+            T.JpegCompression(quality_lower=95, quality_upper=100, p=0.4),  # <<< Note: Deprecated
+            T.Blur(blur_limit=7, p=0.3),
         ])
     aug_transforms.extend([
-        RandomSizedCrop(min_max_height=(256, 256),
-                        height=256,
-                        width=256,
-                        w2h_ratio=1.0,
-                        interpolation=cv2.INTER_LINEAR,
-                        p=1.0),
+        T.RandomSizedCrop(min_max_height=(256, 256),
+                          height=256,
+                          width=256,
+                          w2h_ratio=1.0,
+                          interpolation=cv2.INTER_LINEAR,
+                          p=1.0),
     ])
     aug_transforms = Compose(aug_transforms)
 
     mask_only_transforms = Compose([
-        Normalize(mean=0, std=1, always_apply=True)
+        T.Normalize(mean=0, std=1, always_apply=True)
     ])
     image_only_transforms = Compose([
-        Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), always_apply=True)
+        T.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), always_apply=True)
     ])
     final_transforms = Compose([
         ToTensorV2()
