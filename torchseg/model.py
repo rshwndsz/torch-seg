@@ -1,4 +1,4 @@
-from segmentation_models_pytorch import smp
+import segmentation_models_pytorch as smp
 
 # Model pretrained on imagenet
 # For classification specify aux_params
@@ -7,7 +7,7 @@ model = smp.Unet(encoder_name="resnet34",
                  encoder_depth=5,
                  encoder_weights="imagenet",
                  decoder_use_batchnorm=True,
-                 decoder_channels=(256, 128, 64, 32, 16),
+                 decoder_channels=[256, 128, 64, 32, 16],
                  decoder_attention_type=None,  # See: https://arxiv.org/pdf/1808.08127.pdf
                  activation=None,
                  in_channels=3,
