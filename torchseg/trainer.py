@@ -1,5 +1,6 @@
 # Python STL
 import time
+import os
 # PyTorch
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -11,6 +12,9 @@ from .loss import MixedLoss
 from .data import provider
 from .data import DATA_FOLDER
 from .metrics import Meter, epoch_log
+
+_DIRNAME = os.path.dirname(__file__)
+_CHECKPOINT_PATH = os.path.join(_DIRNAME, "checkpoints", "model-2.pth")
 
 
 class Trainer(object):
@@ -57,6 +61,7 @@ class Trainer(object):
         self.losses = {phase: [] for phase in self.phases}
         self.iou_scores = {phase: [] for phase in self.phases}
         self.dice_scores = {phase: [] for phase in self.phases}
+        self.acc_scores = {phase: [] for phase in self.phases}
 
     def forward(self, images, targets):
         """Forward pass"""
@@ -99,11 +104,12 @@ class Trainer(object):
 
         # Calculate losses
         epoch_loss = running_loss / total_batches
-        dice, iou = epoch_log(phase, epoch, epoch_loss, meter, start)
+        dice, iou, acc = epoch_log(phase, epoch, epoch_loss, meter, start)
         # Collect losses
         self.losses[phase].append(epoch_loss)
         self.dice_scores[phase].append(dice)
         self.iou_scores[phase].append(iou)
+        self.acc_scores[phase].append(acc)
 
         # Empty GPU cache
         torch.cuda.empty_cache()
@@ -141,6 +147,5 @@ class Trainer(object):
                     # TODO: Add error handling here
                     # TODO: Use a different file for each save
                     # TODO: Sample file name: ./checkpoints/model-e-020-v-0.1234.pth
-                    torch.save(state, "checkpoints/model-3.pth"
-                               .format(epoch, self.best_loss))
+                    torch.save(state, _CHECKPOINT_PATH)
             print()

@@ -20,8 +20,8 @@ if __name__ == "__main__":
 
     def plot(scores, name):
         plt.figure(figsize=(15, 5))
-        plt.plot(range(len(scores["train"][12:])), scores["train"][12:], label=f'train {name}')
-        plt.plot(range(len(scores["train"][12:])), scores["val"][12:], label=f'val {name}')
+        plt.plot(range(len(scores["train"])), scores["train"], label=f'train {name}')
+        plt.plot(range(len(scores["val"])), scores["val"], label=f'val {name}')
         plt.title(f'{name} plot')
         plt.xlabel('Epoch')
         plt.ylabel(f'{name}')
