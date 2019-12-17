@@ -5,9 +5,10 @@ from torch.nn import functional as F
 
 
 def dice_loss(logits, target):
-    logits = torch.sigmoid(logits)
-    smooth = 1e-7 # <<<<<<<<<<<<< Note: Hardcoded smoothing
-    iflat = logits.view(-1)
+    # See: https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+    probs = torch.sigmoid(logits)
+    smooth = 1e-7  # <<<<<<<<<<<<< Note: Hardcoded smoothing
+    iflat = probs.view(-1)
     tflat = target.view(-1)
     intersection = (iflat * tflat).sum()
     return (2.0 * intersection + smooth) / (iflat.sum() + tflat.sum() + smooth)
@@ -25,7 +26,7 @@ class FocalLoss(nn.Module):
                              .format(target.size(), logits.size()))
         max_val = (-logits).clamp(min=0)
         loss = logits - logits * target + max_val + \
-               ((-max_val).exp() + (-logits - max_val).exp()).log()
+            ((-max_val).exp() + (-logits - max_val).exp()).log()
         invprobs = F.logsigmoid(-logits * (target * 2.0 - 1.0))
         loss = (invprobs * self.gamma).exp() * loss
         return loss.mean()
