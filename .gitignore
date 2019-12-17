@@ -140,3 +140,7 @@ dmypy.json
 !*/dataset/.gitkeep
 !*/dataset/raw/.gitkeep
 !*/dataset/processed/.gitkeep
+
+# Checkpoints
+*/checkpoints/*
+!*/checkpoints/.gitkeep
