@@ -1,3 +1,5 @@
+# Python STL
+from datetime import datetime
 # Data Science
 import numpy as np
 import sklearn.metrics as skm
@@ -242,49 +244,82 @@ class Meter:
     """A meter to keep track of losses and scores"""
 
     def __init__(self, phase, epoch):
-        self.base_threshold = 0.5  # <<<< Change: Hardcoded threshold
-        self.dice_scores = []
-        self.iou_scores = []
-        self.acc_scores = []
+        self.base_threshold = 0.5
+        self.metrics = {
+            'dice': [],
+            'iou': [],
+            'acc': [],
+        }
 
     def update(self, targets, logits):
+        """
+        Calculate metrics for each batch.
+
+        :param targets: Ground truth
+        :type targets: torch.tensor
+        :param logits: Raw logits
+        :type logits: torch.tensor
+        """
         probs = torch.sigmoid(logits)
         preds = Meter._predict(probs, self.base_threshold)
 
         dice = dice_coeff(probs, targets, self.base_threshold)
-        self.dice_scores.extend(dice)
+        self.metrics['dice'].extend(dice)
 
         iou = compute_iou_batch(preds, targets, classes=[1])
-        self.iou_scores.append(iou)
+        self.metrics['iou'].append(iou)
 
         acc = computer_acc_batch(preds, targets)
-        self.acc_scores.append(acc)
+        self.metrics['acc'].append(acc)
 
     def get_metrics(self):
-        metrics = {
-            'dice': np.nanmean(self.dice_scores),
-            'iou': np.nanmean(self.iou_scores),
-            'acc': np.nanmean(self.acc_scores),
-        }
-        return metrics
+        """
+        Compute mean of batchwise metrics
+
+        :return: Dictionary of average metrics
+        :rtype: dict[str, float]
+        """
+        self.metrics.update({key: np.nanmean(self.metrics[key])
+                             for key in self.metrics.keys()})
+        return self.metrics
 
     @staticmethod
-    def _predict(probs: torch.tensor, threshold: torch.tensor):
+    def _predict(probs, threshold):
         """
-        Thresholding logits for binary prediction
-        :param probs: Probabilities from predicted output
-        :param threshold: logits > threshold = 1, else 0
-        :return: Thresholded logits [0 or 1] torch.uint8
+        Thresholding probabilities for binary prediction
+
+        :param probs: Probabilities from predicted output [0..1]
+        :type probs: torch.Tensor
+        :param threshold: logits > threshold => 1, else 0
+        :type threshold: float
+        :return: logits [0 or 1]
+        :rtype: torch.FloatTensor
         """
-        return probs > threshold
+        return (probs > threshold).float()
 
+    @staticmethod
+    def epoch_log(phase, epoch, epoch_loss, meter, start, fmt):
+        """
+        Logging metrics at the end of an epoch.
 
-# TODO: Move this into the trainer
-def epoch_log(phase, epoch, epoch_loss, meter, start):
-    """Logging the metrics at the end of an epoch."""
-    metrics = meter.get_metrics()
-    print("Loss: %0.4f | dice: %0.4f | IoU: %0.4f | Acc: %0.4f" % (epoch_loss,
-                                                                   metrics['dice'],
-                                                                   metrics['iou'],
-                                                                   metrics['acc']))
-    return metrics
+        :param phase: Phase of training ['train' or 'val']
+        :type phase: str
+        :param epoch: Current epoch
+        :type epoch: int
+        :param epoch_loss: Current average epoch loss
+        :type epoch_loss: float
+        :param meter: Meter object containing metrics for the epoch
+        :type meter: Meter
+        :param start: Time when epoch started
+        :type start: str
+        :param fmt: Format of the time string `start`
+        :type fmt: str
+        :return: Dictionary of metrics
+        :rtype: dict[str, float]
+        """
+        metrics = meter.get_metrics()
+        delta_t = datetime.strptime(start, fmt) - datetime.strptime(start, fmt)
+        print(f"Loss: {epoch_loss} | dice: {metrics['dice']} | "
+              f"IoU: {metrics['iou']} | Acc: {metrics['acc']} "
+              f"in {delta_t}")
+        return metrics
