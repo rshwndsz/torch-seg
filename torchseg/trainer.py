@@ -73,9 +73,10 @@ class Trainer(object):
 
     def iterate(self, epoch, phase):
         """1 epoch in the life of a model"""
-        # TODO: Use relative time instead of absolute
-        # Log epoch, phase and time
+        # Initialize meter
         meter = Meter(phase, epoch)
+        # Log epoch, phase and start time
+        # TODO: Use relative time instead of absolute
         start = time.strftime("%H:%M:%S")
         print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start}")
 
@@ -118,10 +119,7 @@ class Trainer(object):
 
     def start(self):
         """Start the loops!"""
-        #         from IPython.core.debugger import set_trace
-        #         set_trace()
-        # TODO: Add start and end epochs
-        for epoch in range(1, self.num_epochs + 1):
+        for epoch in range(1, self.num_epochs + 1):    # <<< Change: Hardcoded starting epoch
             # Train model for 1 epoch
             self.iterate(epoch, "train")
             # Construct the state for a possible save later
@@ -131,9 +129,8 @@ class Trainer(object):
                 "state_dict": self.net.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
             }
-            # TODO: Add validation frequency
             # Validate model for 1 epoch
-            if epoch % 5 == 0:
+            if epoch % 5 == 0:  # <<< Change: Hardcoded validation frequency
                 val_loss = self.iterate(epoch, "val")
                 # Step the scheduler based on validation loss
                 self.scheduler.step(val_loss)
