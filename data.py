@@ -14,9 +14,9 @@ from albumentations.pytorch import ToTensorV2
 DATA_FOLDER = "../input/dataset/raw/"
 
 
-# TODO: Try to create a BasicDataset class you can inherit from
+# TODO: Generalize binary segmentation to multiclass segmentation
 class OrganDataset(Dataset):
-    def __init__(self, data_folder, phase):
+    def __init__(self, data_folder, phase, num_classes=2, class_dict=(0, 255)):
         """
         Create an API for the dataset
         :param data_folder: Path to root folder of the dataset
@@ -39,6 +39,19 @@ class OrganDataset(Dataset):
         self.image_names = sorted(os.listdir(_path_to_imgs))
         assert len(self.image_names) != 0, "No images found in {}".format(_path_to_imgs)
 
+        # Number of classes in the segmentation target
+        assert num_classes >= 2, "Number of classes must be >= 2. 2: Binary, >=2: Multi-class"
+        assert isinstance(num_classes, int), "Number of classes must be an integer."
+        self.num_classes = num_classes
+
+        # Dictionary specifying the mapping between pixel values [0, 255] and class indices [0, C-1]
+        assert len(class_dict) == num_classes, "Length of class dict must be same as number of classes."
+        assert max(class_dict) == 255, "Max intensity of grayscale images is 255, " \
+                                       "but class dict: {} specifies otherwise".format(class_dict)
+        assert min(class_dict) == 0, "Min intensity of grayscale images is 0, " \
+                                     "but class dict: {} specifies otherwise".format(class_dict)
+        self.class_dict = class_dict
+
     def __getitem__(self, idx):
         # Load image
         image_name = self.image_names[idx]
@@ -49,7 +62,8 @@ class OrganDataset(Dataset):
         # Load mask
         mask_name = image_name
         mask_path = os.path.join(self.root, self.phase, "masks", mask_name)
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)  # <<<< Change: Generalize reading rgb/gray
+        # Expect mask to have values in the [0, 255] region corresponding to each class
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)  # <<<< Note: Hardcoded reading in Grayscale
         assert mask.size != 0, "cv2: Unable to load mask - {}".format(mask_path)
 
         # TODO: Improve this spagetti (ノಠ益ಠ)ノ彡┻━┻
@@ -60,7 +74,9 @@ class OrganDataset(Dataset):
         aug_tensors = self.transforms['final'](image=new_image['image'], mask=new_mask['image'])
         image = aug_tensors['image']
         mask = aug_tensors['mask']
-        mask = torch.unsqueeze(mask, dim=0)  # For [1, H, W] instead of [H, W]
+
+        if self.num_classes == 2:
+            mask = torch.unsqueeze(mask, dim=0)  # For [1, H, W] instead of [H, W]
         return image, mask
 
     def __len__(self):
@@ -94,8 +110,6 @@ def get_transforms(phase):
             T.RandomBrightnessContrast(p=0.5),
             T.ElasticTransform(p=0.5),
             T.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
-            T.JpegCompression(quality_lower=95, quality_upper=100, p=0.4),  # <<< Note: Deprecated
-            T.Blur(blur_limit=7, p=0.3),
         ])
     aug_transforms.extend([
         T.RandomSizedCrop(min_max_height=(256, 256),
