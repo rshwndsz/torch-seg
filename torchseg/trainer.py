@@ -11,10 +11,11 @@ import torch.backends.cudnn as cudnn
 from .loss import MixedLoss
 from .data import provider
 from .data import DATA_FOLDER
-from .metrics import Meter, epoch_log
+from .metrics import Meter
 
 _DIRNAME = os.path.dirname(__file__)
 _CHECKPOINT_PATH = os.path.join(_DIRNAME, "checkpoints", "model-2.pth")
+_TIME_FMT = "%I:%M:%S %p"
 
 
 class Trainer(object):
@@ -29,8 +30,12 @@ class Trainer(object):
         self.phases = ["train", "val"]
 
         # Torch-specific initializations
-        self.device = torch.device("cuda:0")
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        if not torch.cuda.is_available():
+            self.device = torch.device("cpu")
+            torch.set_default_tensor_type("torch.FloatTensor")
+        else:
+            self.device = torch.device("cuda:0")
+            torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
         # Model, loss, optimizer & scheduler
         self.net = model
@@ -67,9 +72,9 @@ class Trainer(object):
         """Forward pass"""
         images = images.to(self.device)
         masks = targets.to(self.device)
-        outputs = self.net(images)
-        loss = self.criterion(outputs, masks)
-        return loss, outputs
+        logits = self.net(images)
+        loss = self.criterion(logits, masks)
+        return loss, logits
 
     def iterate(self, epoch, phase):
         """1 epoch in the life of a model"""
@@ -77,7 +82,7 @@ class Trainer(object):
         meter = Meter(phase, epoch)
         # Log epoch, phase and start time
         # TODO: Use relative time instead of absolute
-        start = time.strftime("%H:%M:%S")
+        start = time.strftime(_TIME_FMT, time.localtime())
         print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start}")
 
         # Set up model, loader and initialize losses
@@ -92,7 +97,7 @@ class Trainer(object):
         for itr, batch in enumerate(dataloader):
             images, targets = batch
             # Forward pass
-            loss, outputs = self.forward(images, targets)
+            loss, logits = self.forward(images, targets)
             if phase == "train":
                 # Backprop for training only
                 loss.backward()
@@ -100,12 +105,13 @@ class Trainer(object):
                 self.optimizer.zero_grad()
             # Get losses
             running_loss += loss.item()
-            outputs = outputs.detach().cpu()
-            meter.update(targets, outputs)
+            logits = logits.detach().cpu()
+            meter.update(targets, logits)
 
         # Calculate losses
         epoch_loss = running_loss / total_batches
-        dice, iou, acc = epoch_log(phase, epoch, epoch_loss, meter, start)
+        dice, iou, acc = Meter.epoch_log(phase, epoch, epoch_loss,
+                                         meter, start, _TIME_FMT)
         # Collect losses
         self.losses[phase].append(epoch_loss)
         self.dice_scores[phase].append(dice)
