@@ -1,5 +1,6 @@
 # Python STL
 import os
+import argparse
 # Data Science
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,10 +17,8 @@ from albumentations.pytorch import ToTensorV2
 # Local
 from torchseg.data import DATA_FOLDER
 from torchseg.model import model
-from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
-_CHECKPOINT_PATH = os.path.join(_DIRNAME, "torchseg", "checkpoints", "model-test.pth")
 
 
 class TestDataset(Dataset):
@@ -45,17 +44,27 @@ class TestDataset(Dataset):
         return len(self.image_names)
 
 
-# TODO: Write code for evaluation with weight-loading
+def cli():
+    parser = argparse.ArgumentParser(description='Torchseg')
+    parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
+                        default="model.pth",
+                        help='Name of checkpoint file inside torchseg/checkpoints/')
+
+    parser_args = parser.parse_args()
+
+    return parser_args
+
+
 # TODO: Write code for overlapping window evaluation (replace downsampling)
 if __name__ == "__main__":
+    args = cli()
     testset = TestDataset(DATA_FOLDER)
 
-    model_trainer = Trainer(model)
-    model = model_trainer.net
     device = torch.device("cuda")
 
     model.eval()
-    state = torch.load(_CHECKPOINT_PATH)
+    checkpoint_path = os.path.join(_DIRNAME, "torchseg", "checkpoints", args.checkpoint_name)
+    state = torch.load(checkpoint_path)
     model.load_state_dict(state["state_dict"])
 
     with torch.no_grad():

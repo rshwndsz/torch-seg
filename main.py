@@ -1,3 +1,5 @@
+# Python STL
+import argparse
 # Data Science
 import matplotlib.pyplot as plt
 
@@ -6,10 +8,35 @@ from torchseg.model import model
 from torchseg.trainer import Trainer
 
 
+def cli():
+    parser = argparse.ArgumentParser(description='Torchseg')
+    parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
+                        default="model.pth",
+                        help='Name of checkpoint file inside torchseg/checkpoints/')
+    parser.add_argument('-b', '--batch_size', dest="batch_size", type=int,
+                        default=32,
+                        help='Batch size')
+    parser.add_argument('-w', '--workers', dest='num_workers', type=int,
+                        default=4,
+                        help='Number of workers for dataloader')
+    parser.add_argument('--lr', dest='lr', type=float,
+                        default=3e-4,
+                        help='Initial learning rate')
+    parser.add_argument('-e', '--epoch', dest='num_epochs', type=int,
+                        default=3,
+                        help='Number of epochs')
+
+    parser_args = parser.parse_args()
+
+    return parser_args
+
+
 if __name__ == "__main__":
-    # TODO: Add CLI with argparse
+    # CLI
+    args = cli()
+
     # Get trainer
-    model_trainer = Trainer(model)
+    model_trainer = Trainer(model, args)
     # Start training + validation
     model_trainer.start()
 

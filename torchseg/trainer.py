@@ -14,19 +14,18 @@ from .data import DATA_FOLDER
 from .metrics import Meter
 
 _DIRNAME = os.path.dirname(__file__)
-_CHECKPOINT_PATH = os.path.join(_DIRNAME, "checkpoints", "model-2.pth")
 _TIME_FMT = "%I:%M:%S %p"
 
 
 class Trainer(object):
     """This class takes care of training and validation of our model"""
 
-    def __init__(self, model):
+    def __init__(self, model, args):
         # Set hyperparameters
-        self.num_workers = 8  # Raise this if shared memory is high
-        self.batch_size = {"train": 32, "val": 32}
-        self.lr = 3e-4  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
-        self.num_epochs = 100
+        self.num_workers = args.num_workers  # Raise this if shared memory is high
+        self.batch_size = {"train": args.batch_size, "val": args.batch_size}
+        self.lr = args.lr  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
+        self.num_epochs = args.num_epochs
         self.phases = ["train", "val"]
 
         # Torch-specific initializations
@@ -36,6 +35,7 @@ class Trainer(object):
         else:
             self.device = torch.device("cuda:0")
             torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        self.checkpoint_path = os.path.join(_DIRNAME, "checkpoints", args.checkpoint_name)
 
         # Model, loss, optimizer & scheduler
         self.net = model
@@ -151,5 +151,5 @@ class Trainer(object):
                     # TODO: Add error handling here
                     # TODO: Use a different file for each save
                     # TODO: Sample file name: ./checkpoints/model-e-020-v-0.1234.pth
-                    torch.save(state, _CHECKPOINT_PATH)
+                    torch.save(state, self.checkpoint_path)
             print()
