@@ -236,10 +236,10 @@ class Meter:
 
         Parameters
         ----------
-        targets : torch.FloatTensor
+        targets : torch.Tensor
             [N C H W]
             Ground truths
-        logits : torch.FloatTensor
+        logits : torch.Tensor
             [N C H W]
             Raw logits
         """
