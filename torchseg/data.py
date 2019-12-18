@@ -18,10 +18,19 @@ DATA_FOLDER = os.path.join(dirname, "dataset/raw/")
 # TODO: Generalize binary segmentation to multiclass segmentation
 class OrganDataset(Dataset):
     def __init__(self, data_folder, phase, num_classes=2, class_dict=(0, 255)):
-        """
-        Create an API for the dataset
-        :param data_folder: Path to root folder of the dataset
-        :param phase: Phase of learning; In ['train', 'val']
+        """Create an API for the dataset
+
+        Parameters
+        ----------
+        data_folder : str
+            Root folder of dataset
+        phase : str
+            Phase of learning
+            In ['train', 'val']
+        num_classes : int
+            Number of classes (including background)
+        class_dict : dict[int, int]
+            Dictionary mapping brightness to class indices
         """
         # Root folder of the dataset
         assert os.path.isdir(data_folder), "{} is not a directory or it doesn't exist.".format(data_folder)
@@ -88,10 +97,18 @@ class OrganDataset(Dataset):
 # TODO: Add logging here
 # TODO: Move into DataSet as static method
 def get_transforms(phase):
-    """
-    Get composed albumentations transforms
-    :param phase: Phase of learning; In ['train', 'val']
-    :return: Composed list of albumentations transforms
+    """Get composed albumentations augmentations
+
+    Parameters
+    ----------
+    phase : str
+        Phase of learning
+        In ['train', 'val']
+
+    Returns
+    -------
+    transforms: dict[str, albumentations.core.composition.Compose]
+        Composed list of transforms
     """
     aug_transforms = []
 
@@ -143,13 +160,24 @@ def get_transforms(phase):
 
 # TODO: Add logging here
 def provider(data_folder, phase, batch_size=8, num_workers=4):
-    """
-    Return DataLoader for the Dataset
-    :param data_folder: Path to root folder of the dataset
-    :param phase: Phase of learning; In ['train', 'val']
-    :param batch_size: Batch size; Usually a multiple of 8
-    :param num_workers: Number of workers; Saturate your shared mem
-    :return: DataLoader for the provided phase
+    """Return dataloader for the dataset
+
+    Parameters
+    ----------
+    data_folder : str
+        Root folder of the dataset
+    phase : str
+        Phase of learning
+        In ['train', 'val']
+    batch_size : int
+        Batch size
+    num_workers : int
+        Number of workers
+
+    Returns
+    -------
+    dataloader: torch.utils.data.DataLoader
+        DataLoader for loading data from CPU to GPU
     """
     image_dataset = OrganDataset(data_folder, phase)
     dataloader = DataLoader(

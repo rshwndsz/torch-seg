@@ -18,15 +18,27 @@ _TIME_FMT = "%I:%M:%S %p"
 
 
 class Trainer(object):
-    """This class takes care of training and validation of our model"""
+    """An object to encompass all training and validation
 
+    Training loop, validation loop, logging, checkpoints are all
+    implemented here.
+
+    Attributes
+    ----------
+    model : torch.nn.Module
+        PyTorch model of your NN
+    args : :obj:
+        CLI arguments
+    """
     def __init__(self, model, args):
         # Set hyperparameters
         self.num_workers = args.num_workers  # Raise this if shared memory is high
         self.batch_size = {"train": args.batch_size, "val": args.batch_size}
         self.lr = args.lr  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
         self.num_epochs = args.num_epochs
+        self.current_epoch = 0
         self.phases = ["train", "val"]
+        self.val_freq = args.val_freq
 
         # Torch-specific initializations
         if not torch.cuda.is_available():
@@ -69,7 +81,23 @@ class Trainer(object):
         self.acc_scores = {phase: [] for phase in self.phases}
 
     def forward(self, images, targets):
-        """Forward pass"""
+        """Forward pass
+
+        Parameters
+        ----------
+        images : torch.Tensor
+            Input to the NN
+        targets : torch.Tensor
+            Supervised labels for the NN
+
+        Returns
+        -------
+        loss: torch.Tensor
+            Loss from one forward pass
+        logits: torch.Tensor
+            Raw output of the NN, without any activation function
+            in the last layer
+        """
         images = images.to(self.device)
         masks = targets.to(self.device)
         logits = self.net(images)
@@ -77,11 +105,23 @@ class Trainer(object):
         return loss, logits
 
     def iterate(self, epoch, phase):
-        """1 epoch in the life of a model"""
+        """1 epoch in the life of a model
+
+        Parameters
+        ----------
+        epoch : int
+            Current epoch
+        phase : str
+            Phase of learning
+            In ['train', 'val']
+        Returns
+        -------
+        epoch_loss: float
+            Average loss for the epoch
+        """
         # Initialize meter
         meter = Meter(phase, epoch)
         # Log epoch, phase and start time
-        # TODO: Use relative time instead of absolute
         start_time = time.strftime(_TIME_FMT, time.localtime())
         print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start_time}")
 
@@ -94,6 +134,7 @@ class Trainer(object):
 
         # Learning!
         self.optimizer.zero_grad()
+        # TODO: Add progress bar
         for itr, batch in enumerate(dataloader):
             images, targets = batch
             # Forward pass
@@ -127,6 +168,8 @@ class Trainer(object):
     def start(self):
         """Start the loops!"""
         for epoch in range(1, self.num_epochs + 1):    # <<< Change: Hardcoded starting epoch
+            # Update current_epoch
+            self.current_epoch = epoch
             # Train model for 1 epoch
             self.iterate(epoch, "train")
             # Construct the state for a possible save later
@@ -137,19 +180,18 @@ class Trainer(object):
                 "optimizer": self.optimizer.state_dict(),
             }
             # Validate model for 1 epoch
-            if epoch % 5 == 0:  # <<< Change: Hardcoded validation frequency
+            if epoch % self.val_freq == 0:  # <<< Change: Hardcoded validation frequency
                 val_loss = self.iterate(epoch, "val")
                 # Step the scheduler based on validation loss
                 self.scheduler.step(val_loss)
                 # TODO: Add EarlyStopping
-                # TODO: Add model saving on KeyboardInterrupt (^C)
 
                 # Save model if validation loss is lesser than anything seen before
                 if val_loss < self.best_loss:
                     print("******** New optimal found, saving state ********")
                     state["best_loss"] = self.best_loss = val_loss
-                    # TODO: Add error handling here
-                    # TODO: Use a different file for each save
-                    # TODO: Sample file name: ./checkpoints/model-e-020-v-0.1234.pth
-                    torch.save(state, self.checkpoint_path)
+                    try:
+                        torch.save(state, self.checkpoint_path)
+                    except FileNotFoundError as e:
+                        print(f"Error while saving checkpoint\n{e}")
             print()

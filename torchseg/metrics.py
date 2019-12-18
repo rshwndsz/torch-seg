@@ -18,21 +18,21 @@ def dice_score(probs, targets, threshold=0.5):
 
     Parameters
     ----------
-    probs: torch.Tensor
+    probs : torch.Tensor
         Probabilities
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    threshold: float
+    threshold : float
         probs > threshold => 1
         probs <= threshold => 0
 
     Returns
     -------
-    dice: float
+    dice : float
         Dice score
 
     See Also
-    ________
+    --------
         https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     """
 
@@ -59,16 +59,16 @@ def true_positive(preds, targets, num_classes=2):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
 
     Returns
     -------
-    tp: torch.Tensor
+    tp : torch.Tensor
         Tensor of number of true positives for each class
     """
     out = []
@@ -83,16 +83,16 @@ def true_negative(preds, targets, num_classes):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
 
     Returns
     -------
-    tn: torch.Tensor
+    tn : torch.Tensor
         Tensor of true negatives for each class
     """
     out = []
@@ -107,16 +107,16 @@ def false_positive(preds, targets, num_classes):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
 
     Returns
     -------
-    fp: torch.Tensor
+    fp : torch.Tensor
         Tensor of false positives for each class
     """
     out = []
@@ -131,16 +131,16 @@ def false_negative(preds, targets, num_classes):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
 
     Returns
     -------
-    fn: torch.Tensor
+    fn : torch.Tensor
         Tensor of false negatives for each class
     """
     out = []
@@ -155,16 +155,16 @@ def precision_score(preds, targets, num_classes):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
 
     Returns
     -------
-    precision: (float, float)
+    precision : (float, float)
         Precision score for class 2
     """
     tp = true_positive(preds, targets, num_classes).to(torch.float)
@@ -180,14 +180,14 @@ def accuracy_score(preds, targets):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
 
     Returns
     -------
-    acc: float
+    acc : float
         Average accuracy score
     """
     valids = (targets >= 0)
@@ -201,15 +201,15 @@ def iou_score(preds, targets, num_classes):
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Predictions
-    targets: torch.Tensor
+    targets : torch.Tensor
         Ground truths
-    num_classes: int
+    num_classes : int
         Number of classes (including background)
     Returns
     -------
-    iou: float
+    iou : float
         IoU score or Jaccard index
     """
     intersection = torch.sum(targets * preds)
@@ -236,10 +236,10 @@ class Meter:
 
         Parameters
         ----------
-        targets: torch.FloatTensor
+        targets : torch.FloatTensor
             [N C H W]
             Ground truths
-        logits: torch.FloatTensor
+        logits : torch.FloatTensor
             [N C H W]
             Raw logits
         """
@@ -269,7 +269,7 @@ class Meter:
 
         Returns
         -------
-        self.metrics: dict[str, float]
+        self.metrics : dict[str, float]
             Mean of all metrics as a dictionary
         """
         self.metrics.update({key: np.nanmean(self.metrics[key])
@@ -282,22 +282,22 @@ class Meter:
 
         Parameters
         ----------
-        phase: str
+        phase : str
             Phase of training
-        epoch: int
+        epoch : int
             Current epoch number
-        epoch_loss: float
+        epoch_loss : float
             Current average epoch loss
-        meter: Meter
+        meter : Meter
             Meter object holding metrics for current epoch
-        start_time: str
+        start_time : str
             Start time as a string
-        fmt: str
+        fmt : str
             Formatting applied to `start_time`
 
         Returns
         -------
-        metrics: dict[str, float]
+        metrics : dict[str, float]
             Dictionary of metrics
         """
         metrics = meter.get_metrics()
