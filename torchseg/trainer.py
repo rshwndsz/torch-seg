@@ -82,8 +82,8 @@ class Trainer(object):
         meter = Meter(phase, epoch)
         # Log epoch, phase and start time
         # TODO: Use relative time instead of absolute
-        start = time.strftime(_TIME_FMT, time.localtime())
-        print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start}")
+        start_time = time.strftime(_TIME_FMT, time.localtime())
+        print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start_time}")
 
         # Set up model, loader and initialize losses
         self.net.train(phase == "train")
@@ -104,14 +104,15 @@ class Trainer(object):
                 self.optimizer.step()
                 self.optimizer.zero_grad()
             # Get losses
-            running_loss += loss.item()
-            logits = logits.detach().cpu()
-            meter.update(targets, logits)
+            with torch.no_grad():
+                running_loss += loss.item()
+                logits = logits.detach().cpu()
+                meter.update(targets, logits)
 
         # Calculate losses
         epoch_loss = running_loss / total_batches
-        dice, iou, acc = Meter.epoch_log(phase, epoch, epoch_loss,
-                                         meter, start, _TIME_FMT)
+        dice, iou, acc, _ = Meter.epoch_log(phase, epoch, epoch_loss,
+                                            meter, start_time, _TIME_FMT)
         # Collect losses
         self.losses[phase].append(epoch_loss)
         self.dice_scores[phase].append(dice)
