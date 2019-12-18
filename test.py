@@ -52,6 +52,13 @@ def cli():
 
     parser_args = parser.parse_args()
 
+    # Validate provided args
+    if not os.path.isdir(os.path.join("torchseg", "checkpoints",
+                                      parser_args.checkpoint_path)):
+        raise FileNotFoundError("The checkpoints file {} was not found."
+                                "Check the name again."
+                                .format(parser_args.checkpoint_name))
+
     return parser_args
 
 
