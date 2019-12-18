@@ -1,37 +1,42 @@
 # Python STL
 from datetime import datetime
+import time
 # Data Science
 import numpy as np
-import sklearn.metrics as skm
 # PyTorch
 import torch
-import torch.nn.functional as F
-from torch_scatter import scatter_add
 
+# Local
+from torchseg import utils
 
-# TODO: Move into utils
-# TODO: Test new nanmean for tensors
-def nanmean(v, *args, inplace=False, **kwargs):
-    if not inplace:
-        v = v.clone()
-    is_nan = torch.isnan(v)
-    v[is_nan] = 0
-    return v.sum(*args, **kwargs) / (~is_nan).float().sum(*args, **kwargs)
-
-
+# TODO: Generalize to multiclass segmentation
 # TODO: Add tests to test integrity
-def dice_coeff(probs, targets, threshold=0.5):
-    """
-    Calculate Sorenson-Dice coefficient
-    See: https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 
-    :param probs: Predicted outputs in probabilites [0..1]
-    :param targets: Ground truth [0 or 1]
-    :param threshold: Threshold to convert probabilities to binary
-    :return: Sorenson-Dice coefficient
+
+def dice_score(probs, targets, threshold=0.5):
+    """Calculate Sorenson-Dice coefficient
+
+    Parameters
+    ----------
+    probs: torch.Tensor
+        Probabilities
+    targets: torch.Tensor
+        Ground truths
+    threshold: float
+        probs > threshold => 1
+        probs <= threshold => 0
+
+    Returns
+    -------
+    dice: float
+        Dice score
+
+    See Also
+    ________
+        https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     """
 
-    batch_size = len(targets)
+    batch_size = targets.shape[0]
     with torch.no_grad():
         # Shape: [N, C, H, W]targets
         probs = probs.view(batch_size, -1)
@@ -41,203 +46,177 @@ def dice_coeff(probs, targets, threshold=0.5):
             raise ValueError("Shape of probs: {} must be the same as that of targets: {}."
                              .format(probs.shape, targets.shape))
         # Only 1's and 0's in p & t
-        p = (probs > threshold).float()
-        t = (targets > 0.5).float()
-
+        p = utils.predict(probs, threshold)
+        t = utils.predict(targets, 0.5)
         # Shape: [N, 1]
         dice = 2 * (p * t).sum(-1) / ((p + t).sum(-1))
-    return dice
+
+    return utils.nanmean(dice).item()
 
 
-# TODO: Add tests to test integrity
-def accuracy_score(preds, targets):
-    """
-    Calculate accuracy of predictions
+def true_positive(preds, targets, num_classes=2):
+    """Compute number of true positive predictions
 
-    # Credits: https://github.com/CSAILVision/semantic-segmentation-pytorch/blob/master/utils.py
-    :param preds: Predicted outputs [0..C-1]
-    :param targets: Ground truth [0..C-1]
-    :return: Accuracy
-    """
-    valids = (targets >= 0)
-    acc_sum = (valids * (preds == targets)).sum().item()
-    valid_sum = valids.sum()
-    return float(acc_sum) / (valid_sum + 1e-10)    # <<< Change: Hardcoded smoothing
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
 
-
-def computer_acc_batch(outputs, labels):
-    #     from IPython.core.debugger import set_trace
-    #     set_trace()
-    accs = []
-    preds = np.copy(outputs)  # copy is important
-    labels = np.array(labels)  # Tensor to ndarray
-    for pred, label in zip(preds, labels):
-        accs.append(skm.accuracy_score(label.flatten(),
-                                       pred.flatten(),
-                                       normalize=True))
-    acc = np.nanmean(accs)
-    return acc
-
-
-# TODO: Find a place for this
-def compute_ious(pred, label, classes, ignore_index=255, only_present=True):
-    """Computes IoU for one ground truth mask and predicted mask."""
-    pred[label == ignore_index] = 0
-    ious = []
-    for c in classes:
-        label_c = label == c
-        if only_present and np.sum(label_c) == 0:
-            ious.append(np.nan)
-            continue
-        pred_c = pred == c
-        intersection = np.logical_and(pred_c, label_c).sum()
-        union = np.logical_or(pred_c, label_c).sum()
-        if union != 0:
-            ious.append(intersection / union)
-    return ious if ious else [1]
-
-
-# TODO: Find a place for this
-def compute_iou_batch(outputs, labels, classes=None):
-    """Computes mean IoU for a batch of ground truth masks and predicted masks."""
-    ious = []
-    preds = np.copy(outputs)  # copy is important
-    labels = np.array(labels)  # Tensor to ndarray
-    for pred, label in zip(preds, labels):
-        ious.append(np.nanmean(compute_ious(pred, label, classes)))
-    iou = np.nanmean(ious)
-    return iou
-
-
-def true_positive(pred, target, num_classes=2):
-    r"""Computes the number of true positive predictions.
-
-    Args:
-        pred (Tensor): The predictions.
-        target (Tensor): The targets.
-        num_classes (int): The number of classes.
-
-    :rtype: :class:`LongTensor`
+    Returns
+    -------
+    tp: torch.Tensor
+        Tensor of number of true positives for each class
     """
     out = []
     for i in range(num_classes):
-        out.append(((pred == i) & (target == i)).sum())
+        out.append(((preds == i) & (targets == i)).sum())
 
     return torch.tensor(out)
 
 
-def true_negative(pred, target, num_classes):
-    r"""Computes the number of true negative predictions.
+def true_negative(preds, targets, num_classes):
+    """Computes number of true negative predictions
 
-    Args:
-        pred (Tensor): The predictions.
-        target (Tensor): The targets.
-        num_classes (int): The number of classes.
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
 
-    :rtype: :class:`LongTensor`
+    Returns
+    -------
+    tn: torch.Tensor
+        Tensor of true negatives for each class
     """
     out = []
     for i in range(num_classes):
-        out.append(((pred != i) & (target != i)).sum())
+        out.append(((preds != i) & (targets != i)).sum())
 
     return torch.tensor(out)
 
 
-def false_positive(pred, target, num_classes):
-    r"""Computes the number of false positive predictions.
+def false_positive(preds, targets, num_classes):
+    """Computes number of false positive predictions
 
-    Args:
-        pred (Tensor): The predictions.
-        target (Tensor): The targets.
-        num_classes (int): The number of classes.
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
 
-    :rtype: :class:`LongTensor`
+    Returns
+    -------
+    fp: torch.Tensor
+        Tensor of false positives for each class
     """
     out = []
     for i in range(num_classes):
-        out.append(((pred == i) & (target != i)).sum())
+        out.append(((preds == i) & (targets != i)).sum())
 
     return torch.tensor(out)
 
 
-def false_negative(pred, target, num_classes):
-    r"""Computes the number of false negative predictions.
+def false_negative(preds, targets, num_classes):
+    """Computes number of false negative predictions
 
-    Args:
-        pred (Tensor): The predictions.
-        target (Tensor): The targets.
-        num_classes (int): The number of classes.
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
 
-    :rtype: :class:`LongTensor`
+    Returns
+    -------
+    fn: torch.Tensor
+        Tensor of false negatives for each class
     """
     out = []
     for i in range(num_classes):
-        out.append(((pred != i) & (target == i)).sum())
+        out.append(((preds != i) & (targets == i)).sum())
 
     return torch.tensor(out)
 
 
-def precision(pred, target, num_classes):
-    r"""Computes the precision
-    :math:`\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}` of predictions.
+def precision_score(preds, targets, num_classes):
+    """Computes precision score
 
-    Args:
-        pred (Tensor): The predictions.
-        target (Tensor): The targets.
-        num_classes (int): The number of classes.
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
 
-    :rtype: :class:`Tensor`
+    Returns
+    -------
+    precision: (float, float)
+        Precision score for class 2
     """
-    tp = true_positive(pred, target, num_classes).to(torch.float)
-    fp = false_positive(pred, target, num_classes).to(torch.float)
-
+    tp = true_positive(preds, targets, num_classes).to(torch.float)
+    fp = false_positive(preds, targets, num_classes).to(torch.float)
     out = tp / (tp + fp)
     out[torch.isnan(out)] = 0
 
-    return out
+    return out[1].item()  # <<< Change: Hardcoded for binary segmentation
 
 
-def intersection_and_union(pred, target, num_classes, batch=None):
-    r"""Computes intersection and union of predictions.
+def accuracy_score(preds, targets):
+    """Compute accuracy score
 
-    Args:
-        pred (LongTensor): The predictions.
-        target (LongTensor): The targets.
-        num_classes (int): The number of classes.
-        batch (LongTensor): The assignment vector which maps each pred-target
-            pair to an example.
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
 
-    :rtype: (:class:`LongTensor`, :class:`LongTensor`)
+    Returns
+    -------
+    acc: float
+        Average accuracy score
     """
-    pred, target = F.one_hot(pred, num_classes), F.one_hot(target, num_classes)
-
-    if batch is None:
-        i = (pred & target).sum(dim=0)
-        u = (pred | target).sum(dim=0)
-    else:
-        i = scatter_add(pred & target, batch, dim=0)
-        u = scatter_add(pred | target, batch, dim=0)
-
-    return i, u
+    valids = (targets >= 0)
+    acc_sum = (valids * (preds == targets)).sum().item()
+    valid_sum = valids.sum().item()
+    return float(acc_sum) / (valid_sum + 1e-10)    # <<< Change: Hardcoded smoothing
 
 
-def mean_iou(pred, target, num_classes, batch=None):
-    r"""Computes the mean intersection over union score of predictions.
+def iou_score(preds, targets, num_classes):
+    """Computes IoU or Jaccard index
 
-    Args:
-        pred (LongTensor): The predictions.
-        target (LongTensor): The targets.
-        num_classes (int): The number of classes.
-        batch (LongTensor): The assignment vector which maps each pred-target
-            pair to an example.
-
-    :rtype: :class:`Tensor`
+    Parameters
+    ----------
+    preds: torch.Tensor
+        Predictions
+    targets: torch.Tensor
+        Ground truths
+    num_classes: int
+        Number of classes (including background)
+    Returns
+    -------
+    iou: float
+        IoU score or Jaccard index
     """
-    i, u = intersection_and_union(pred, target, num_classes, batch)
-    iou = i.to(torch.float) / u.to(torch.float)
-    iou[torch.isnan(iou)] = 1
-    iou = iou.mean(dim=-1)
-    return iou
+    intersection = torch.sum(targets * preds)
+    union = torch.sum(targets) + torch.sum(preds) - intersection + 1e-7
+    score = (intersection + 1e-7) / union
+
+    return score.item()
 
 
 class Meter:
@@ -249,77 +228,85 @@ class Meter:
             'dice': [],
             'iou': [],
             'acc': [],
+            'prec': []
         }
 
     def update(self, targets, logits):
-        """
-        Calculate metrics for each batch.
+        """Calculates metrics for each batch and updates meter
 
-        :param targets: Ground truth
-        :type targets: torch.tensor
-        :param logits: Raw logits
-        :type logits: torch.tensor
+        Parameters
+        ----------
+        targets: torch.FloatTensor
+            [N C H W]
+            Ground truths
+        logits: torch.FloatTensor
+            [N C H W]
+            Raw logits
         """
         probs = torch.sigmoid(logits)
-        preds = Meter._predict(probs, self.base_threshold)
+        preds = utils.predict(probs, self.base_threshold)
 
-        dice = dice_coeff(probs, targets, self.base_threshold)
-        self.metrics['dice'].extend(dice)
+        # Assertion for shapes
+        if not (preds.shape == targets.shape):
+            raise ValueError("Shape of preds: {} must be the same as that of targets: {}."
+                             .format(preds.shape, targets.shape))
 
-        iou = compute_iou_batch(preds, targets, classes=[1])
+        # TODO: Automate
+        dice = dice_score(probs, targets, self.base_threshold)
+        self.metrics['dice'].append(dice)
+
+        iou = iou_score(preds, targets, num_classes=2)  # <<< TODO: Remove hardcoded num_classes
         self.metrics['iou'].append(iou)
 
-        acc = computer_acc_batch(preds, targets)
+        acc = accuracy_score(preds, targets)
         self.metrics['acc'].append(acc)
 
-    def get_metrics(self):
-        """
-        Compute mean of batchwise metrics
+        prec = precision_score(preds, targets, num_classes=2)
+        self.metrics['prec'].append(prec)
 
-        :return: Dictionary of average metrics
-        :rtype: dict[str, float]
+    def get_metrics(self):
+        """Compute mean of batchwise metrics
+
+        Returns
+        -------
+        self.metrics: dict[str, float]
+            Mean of all metrics as a dictionary
         """
         self.metrics.update({key: np.nanmean(self.metrics[key])
                              for key in self.metrics.keys()})
         return self.metrics
 
     @staticmethod
-    def _predict(probs, threshold):
-        """
-        Thresholding probabilities for binary prediction
+    def epoch_log(phase, epoch, epoch_loss, meter, start_time, fmt):
+        """Logs and returns metrics
 
-        :param probs: Probabilities from predicted output [0..1]
-        :type probs: torch.Tensor
-        :param threshold: logits > threshold => 1, else 0
-        :type threshold: float
-        :return: logits [0 or 1]
-        :rtype: torch.FloatTensor
-        """
-        return (probs > threshold).float()
+        Parameters
+        ----------
+        phase: str
+            Phase of training
+        epoch: int
+            Current epoch number
+        epoch_loss: float
+            Current average epoch loss
+        meter: Meter
+            Meter object holding metrics for current epoch
+        start_time: str
+            Start time as a string
+        fmt: str
+            Formatting applied to `start_time`
 
-    @staticmethod
-    def epoch_log(phase, epoch, epoch_loss, meter, start, fmt):
-        """
-        Logging metrics at the end of an epoch.
-
-        :param phase: Phase of training ['train' or 'val']
-        :type phase: str
-        :param epoch: Current epoch
-        :type epoch: int
-        :param epoch_loss: Current average epoch loss
-        :type epoch_loss: float
-        :param meter: Meter object containing metrics for the epoch
-        :type meter: Meter
-        :param start: Time when epoch started
-        :type start: str
-        :param fmt: Format of the time string `start`
-        :type fmt: str
-        :return: Dictionary of metrics
-        :rtype: dict[str, float]
+        Returns
+        -------
+        metrics: dict[str, float]
+            Dictionary of metrics
         """
         metrics = meter.get_metrics()
-        delta_t = datetime.strptime(start, fmt) - datetime.strptime(start, fmt)
-        print(f"Loss: {epoch_loss} | dice: {metrics['dice']} | "
-              f"IoU: {metrics['iou']} | Acc: {metrics['acc']} "
-              f"in {delta_t}")
+        end_time = time.strftime(fmt, time.localtime())
+        delta_t = (datetime.strptime(end_time, fmt) - datetime.strptime(start_time, fmt))
+
+        # TODO: Automate
+        print(f"Loss: {epoch_loss:.4f} | dice: {metrics['dice']:.4f} | "
+              f"IoU: {metrics['iou']:4f} | Acc: {metrics['acc']:4f} | "
+              f"Prec: {metrics['prec']:4f} in {delta_t}")
+
         return metrics
