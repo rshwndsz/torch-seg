@@ -19,7 +19,7 @@ from torchseg.model import model
 from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
-_CHECKPOINT_PATH = os.path.join(_DIRNAME, "torchseg", "checkpoints", "model-2.pth")
+_CHECKPOINT_PATH = os.path.join(_DIRNAME, "torchseg", "checkpoints", "model-test.pth")
 
 
 class TestDataset(Dataset):
@@ -45,33 +45,26 @@ class TestDataset(Dataset):
         return len(self.image_names)
 
 
-test_loader = DataLoader(TestDataset(DATA_FOLDER),
-                         batch_size=4,
-                         shuffle=False,
-                         num_workers=2,
-                         pin_memory=True,
-                         )
-
 # TODO: Write code for evaluation with weight-loading
-
+# TODO: Write code for overlapping window evaluation (replace downsampling)
 if __name__ == "__main__":
-    # it = iter(test_loader)
-    # plt.imshow(next(it)[2].permute([1, 2, 0]))
-    # plt.show()
+    testset = TestDataset(DATA_FOLDER)
+
     model_trainer = Trainer(model)
-    model = model_trainer.net   # get the model from model_trainer object
+    model = model_trainer.net
     device = torch.device("cuda")
+
     model.eval()
     state = torch.load(_CHECKPOINT_PATH)
     model.load_state_dict(state["state_dict"])
 
-    for i, batch in enumerate(test_loader):
-        preds = torch.sigmoid(model(batch.to(device)))
-        preds = preds.detach().cpu().numpy().squeeze()
-        preds = np.where(preds > 0.5, 1, preds)
-        preds = np.where(preds <= 0.5, 0, preds)
-        print(preds.shape)
-        plt.imshow(preds, 'gray')
-        plt.show()
-        plt.imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0))
-        plt.show()
+    with torch.no_grad():
+        for i, batch in enumerate(testset):
+            batch = batch.unsqueeze(dim=0)
+            print(batch.shape)
+            probs = torch.sigmoid(model(batch.to(device)))
+            preds = (probs > 0.5).float()
+            plt.imshow(preds.cpu().numpy().squeeze(), 'gray')
+            plt.show()
+            plt.imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0), 'gray')
+            plt.show()
