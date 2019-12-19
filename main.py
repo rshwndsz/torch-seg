@@ -59,8 +59,14 @@ logger = logging.getLogger(__name__)
 def cli():
     parser = argparse.ArgumentParser(description='Torchseg')
     parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
-                        default="model.pth",
+                        nargs="?", default=None, const="model.pth",
                         help='Name of checkpoint file inside torchseg/checkpoints/')
+    parser.add_argument('-s', '--save', dest='save_fname', type=str,
+                        default="model-saved.pth",
+                        help="File in checkpoints/ to save state")
+    parser.add_argument('-p', '--pretrained', dest='pretrained', action="store_true",
+                        help="Load imagenet weights or not")
+    parser.set_defaults(feature=True)
     parser.add_argument('-b', '--batch_size', dest="batch_size", type=int,
                         default=32,
                         help='Batch size')
@@ -80,14 +86,22 @@ def cli():
     parser_args = parser.parse_args()
 
     # Some checks on provided args
-    checkpoint_path = os.path.join(_DIRNAME, "torchseg", "checkpoints",
-                                   parser_args.checkpoint_name)
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError("The checkpoints file at {} was not found."
-                                "Check the name again."
-                                .format(checkpoint_path))
+    if parser_args.checkpoint_name is not None:
+        _checkpoint_path = os.path.join(_DIRNAME, "torchseg", "checkpoints",
+                                        parser_args.checkpoint_name)
+        if not os.path.exists(_checkpoint_path):
+            raise FileNotFoundError("The checkpoints file at {} was not found."
+                                    "Check the name again."
+                                    .format(_checkpoint_path))
+        else:
+            logger.info(f"Loading checkpoint file: {_checkpoint_path}")
     else:
-        logger.info(f"Loading checkpoint file: {checkpoint_path}")
+        logger.info(f"Training from scratch")
+
+    if parser_args.pretrained:
+        logger.info("Using pretrained model")
+    else:
+        logger.info("Using random weights")
 
     if parser_args.num_epochs <= 0:
         raise ValueError("Number of epochs: {} must be > 0"
@@ -140,14 +154,14 @@ if __name__ == "__main__":
         logger.info("******** Saving state before exiting ********")
         # Save state if possible
         try:
-            torch.save(state, os.path.join("torchseg",
-                                           "checkpoints",
-                                           args.checkpoint_name))
+            torch.save(state, os.path.join(_DIRNAME, "torchseg",
+                                           "checkpoints", args.save_fname))
         except FileNotFoundError as e:
-            logger.error(f"Error while saving checkpoint\n{e}")
+            logger.exception(f"Error while saving checkpoint", exc_info=True)
         sys.exit(0)
 
     # Helper function to plot scores
+    # TODO: Use subplots
     def metric_plot(scores, name):
         plt.figure(figsize=(15, 5))
         plt.plot(range(len(scores["train"])), scores["train"], label=f'train {name}')

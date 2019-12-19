@@ -83,6 +83,8 @@ class Trainer(object):
         GPU or CPU
     checkpoint_path : str
         Path to checkpoint file
+    save_path : str
+        Path to file where state will be saved
     net
         Our NN in PyTorch
     criterion
@@ -125,8 +127,14 @@ class Trainer(object):
             self.device = torch.device("cuda:0")
             torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
-        # TODO: Load model from checkpoint file if None
-        self.checkpoint_path = os.path.join(_DIRNAME, "checkpoints", args.checkpoint_name)
+        if args.checkpoint_name is not None:
+            self.checkpoint_path = os.path.join(_DIRNAME, "checkpoints",
+                                                args.checkpoint_name)
+        else:
+            self.checkpoint_path = None
+
+        self.save_path = os.path.join(_DIRNAME, "checkpoints",
+                                      args.save_fname)
 
         # Model, loss, optimizer & scheduler
         self.net = model
@@ -236,7 +244,8 @@ class Trainer(object):
         self.holder.add(metrics, phase)
 
         # Empty GPU cache
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         # Return average loss from the criterion for this epoch
         return epoch_loss
 
@@ -255,7 +264,7 @@ class Trainer(object):
                 "optimizer": self.optimizer.state_dict(),
             }
             # Validate model for 1 epoch
-            if epoch % self.val_freq == 0:  # <<< Change: Hardcoded validation frequency
+            if epoch % self.val_freq == 0:
                 val_loss = self.iterate(epoch, "val")
                 # Step the scheduler based on validation loss
                 self.scheduler.step(val_loss)
@@ -267,7 +276,7 @@ class Trainer(object):
                     logger.info("******** New optimal found, saving state ********")
                     state["best_loss"] = self.best_loss = val_loss
                     try:
-                        torch.save(state, self.checkpoint_path)
+                        torch.save(state, self.save_path)
                     except FileNotFoundError as e:
-                        logger.error(f"Error while saving checkpoint\n{e}")
+                        logger.exception(f"Error while saving checkpoint", exc_info=True)
             print()

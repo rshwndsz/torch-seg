@@ -3,13 +3,12 @@ import os
 import argparse
 import logging
 # Data Science
-import numpy as np
 import matplotlib.pyplot as plt
 # Image processing
 import cv2
 # PyTorch
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 # Data Augmentations
 from albumentations.augmentations import transforms as T
 from albumentations.core.composition import Compose
@@ -23,7 +22,18 @@ _DIRNAME = os.path.dirname(__file__)
 
 
 class TestDataset(Dataset):
-    def __init__(self, data_folder, tta=4):
+    """API for the test dataset
+
+    Attributes
+    ----------
+    root : str
+        Root folder of the dataset
+    image_names : list[str]
+        Sorted list of test images
+    transform : albumentations.core.composition.Compose
+        Albumentations augmentations pipeline
+    """
+    def __init__(self, data_folder):
         self.root = data_folder
         self.image_names = sorted(os.listdir(os.path.join(self.root, "test", "imgs")))
         self.transform = Compose(
@@ -68,25 +78,38 @@ def cli():
 
 # TODO: Write code for overlapping window evaluation (replace downsampling)
 if __name__ == "__main__":
+    # Get logger
     logger = logging.getLogger(__name__)
 
+    # Parse CLI arguments
     args = cli()
 
+    # Get test dataset
     testset = TestDataset(DATA_FOLDER)
 
-    device = torch.device("cuda")
+    # Set device
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
+    # Switch model over to evaluation model
     model.eval()
-    checkpoint_path = os.path.join(_DIRNAME, "torchseg", "checkpoints", args.checkpoint_name)
+    # Load state from checkpoint
+    checkpoint_path = os.path.join(_DIRNAME, "torchseg",
+                                   "checkpoints", args.checkpoint_name)
     state = torch.load(checkpoint_path)
     model.load_state_dict(state["state_dict"])
 
+    # For every image in testset, predict and plot
     with torch.no_grad():
         for i, batch in enumerate(testset):
             batch = batch.unsqueeze(dim=0)
             probs = torch.sigmoid(model(batch.to(device)))
             preds = (probs > 0.5).float()
-            plt.imshow(preds.cpu().numpy().squeeze(), 'gray')
-            plt.show()
-            plt.imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0), 'gray')
+            fig, ax = plt.subplots(2, 1)
+            ax[0].imshow(preds.cpu().numpy().squeeze(), 'gray')
+            ax[1].imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0), 'gray')
+            ax[0].set_title("Prediction")
+            ax[1].set_title("Image")
             plt.show()
