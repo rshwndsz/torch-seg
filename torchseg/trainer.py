@@ -1,6 +1,7 @@
 # Python STL
 import time
 import os
+import logging
 # PyTorch
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -17,6 +18,45 @@ _DIRNAME = os.path.dirname(__file__)
 _TIME_FMT = "%I:%M:%S %p"
 
 
+# TODO: Add docs
+class Holder(object):
+    """An object to store values till end of training
+
+    Attributes
+    ----------
+    phases : tuple(str)
+        Phases of learning
+    scores : tuple(str)
+        Short names (keys as defined in Meter) of scores
+    store : dict{str, dict{str, list}}
+        Store list of values for each phase
+    """
+    def __init__(self, phases=('train', 'val'), scores=('loss', 'iou')):
+        self.phases = phases
+        self.scores = scores
+        self.store = {
+            score: {
+                phase: [] for phase in phases
+            } for score in self.scores
+        }
+
+    def add(self, metrics, phase):
+        for score in self.store.keys():
+            try:
+                self.store[score][phase].append(metrics[score])
+            except KeyError:
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Key '{score}' not found. Skipping...", exc_info=True)
+                continue
+
+    def reset(self):
+        self.store = {
+            score: {
+                phase: [] for phase in self.phases
+            } for score in self.scores
+        }
+
+
 class Trainer(object):
     """An object to encompass all training and validation
 
@@ -25,12 +65,49 @@ class Trainer(object):
 
     Attributes
     ----------
-    model : torch.nn.Module
-        PyTorch model of your NN
-    args : :obj:
-        CLI arguments
+    num_workers : int
+        Number of workers
+    batch_size : int
+        Batch size
+    lr : int
+        Learning rate
+    num_epochs : int
+        Number of epochs
+    current_epoch : int
+        Current epoch
+    phases : list[str]
+        List of learning phases
+    val_freq : int
+        Validation frequency
+    device : torch.device
+        GPU or CPU
+    checkpoint_path : str
+        Path to checkpoint file
+    net
+        Our NN in PyTorch
+    criterion
+        Loss function
+    optimizer
+        Optimizer
+    scheduler
+        Learning rate scheduler
+    dataloaders : dict[str, torch.utils.data.DataLoader]
+        Dataloaders for each phase
+    best_loss : float
+        Best validation loss
+    holder : Holder
+        Object to store loss & scores
     """
     def __init__(self, model, args):
+        """Initialize a Trainer object
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            PyTorch model of your NN
+        args : :obj:
+            CLI arguments
+        """
         # Set hyperparameters
         self.num_workers = args.num_workers  # Raise this if shared memory is high
         self.batch_size = {"train": args.batch_size, "val": args.batch_size}
@@ -47,6 +124,8 @@ class Trainer(object):
         else:
             self.device = torch.device("cuda:0")
             torch.set_default_tensor_type("torch.cuda.FloatTensor")
+
+        # TODO: Load model from checkpoint file if None
         self.checkpoint_path = os.path.join(_DIRNAME, "checkpoints", args.checkpoint_name)
 
         # Model, loss, optimizer & scheduler
@@ -75,11 +154,9 @@ class Trainer(object):
 
         # Initialize losses & scores
         self.best_loss = float("inf")  # Very high best_loss for the first iteration
-        # TODO: Replace with a meter
-        self.losses = {phase: [] for phase in self.phases}
-        self.iou_scores = {phase: [] for phase in self.phases}
-        self.dice_scores = {phase: [] for phase in self.phases}
-        self.acc_scores = {phase: [] for phase in self.phases}
+        self.holder = Holder(self.phases, scores=('loss', 'iou', 'dice',
+                                                  'dice_2', 'aji', 'prec',
+                                                  'pq', 'sq', 'dq'))
 
     def forward(self, images, targets):
         """Forward pass
@@ -124,7 +201,8 @@ class Trainer(object):
         meter = Meter(phase, epoch)
         # Log epoch, phase and start time
         start_time = time.strftime(_TIME_FMT, time.localtime())
-        print(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start_time}")
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start_time}")
 
         # Set up model, loader and initialize losses
         self.net.train(phase == "train")
@@ -151,15 +229,11 @@ class Trainer(object):
                 logits = logits.detach().cpu()
                 meter.update(targets, logits)
 
-        # Calculate losses
+        # Collect loss & scores
         epoch_loss = running_loss / total_batches
-        metrics = Meter.epoch_log(phase, epoch, epoch_loss,
-                                  meter, start_time, _TIME_FMT)
-        # Collect losses
-        self.losses[phase].append(epoch_loss)
-        self.dice_scores[phase].append(metrics['dice'])
-        self.iou_scores[phase].append(metrics['iou'])
-        self.acc_scores[phase].append(metrics['acc'])
+        metrics = Meter.epoch_log(epoch_loss, meter, start_time, _TIME_FMT)
+        # Store epoch-wise loss and scores
+        self.holder.add(metrics, phase)
 
         # Empty GPU cache
         torch.cuda.empty_cache()
@@ -189,10 +263,11 @@ class Trainer(object):
 
                 # Save model if validation loss is lesser than anything seen before
                 if val_loss < self.best_loss:
-                    print("******** New optimal found, saving state ********")
+                    logger = logging.getLogger(__name__)
+                    logger.info("******** New optimal found, saving state ********")
                     state["best_loss"] = self.best_loss = val_loss
                     try:
                         torch.save(state, self.checkpoint_path)
                     except FileNotFoundError as e:
-                        print(f"Error while saving checkpoint\n{e}")
+                        logger.error(f"Error while saving checkpoint\n{e}")
             print()
