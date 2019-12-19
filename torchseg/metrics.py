@@ -4,13 +4,14 @@ import logging
 import time
 # Data Science
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 # PyTorch
 import torch
 
 # Local
 from torchseg import utils
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # TODO: Generalize to multiclass segmentation
 # TODO: Add tests to test integrity
@@ -208,8 +209,6 @@ def iou_score(preds, targets):
         Predictions
     targets : torch.Tensor
         Ground truths
-    num_classes : int
-        Number of classes (including background)
     Returns
     -------
     iou : float
@@ -283,7 +282,6 @@ def get_fast_pq(pred, true, match_iou=0.5):
                       pairing information to perform measurement
 
     """
-    from scipy.optimize import linear_sum_assignment  # TODO: Move this import
     assert match_iou >= 0.0, "Cant' be negative"
 
     true = np.copy(true)
@@ -430,6 +428,17 @@ def get_fast_aji(pred, true):
     return aji_score
 
 
+def custom_pq_dq_sq(preds, targets, iou):
+    tp = true_positive(preds, targets)[1]
+    fp = false_positive(preds, targets, num_classes=2)[1]
+    fn = false_negative(preds, targets, num_classes=2)[1]
+
+    dq = tp / (tp + 0.5*fp + 0.5*fn)
+    sq = iou / tp
+    pq = dq * sq
+    return pq, dq, sq
+
+
 class Meter:
     """A meter to keep track of losses and scores"""
 
@@ -441,8 +450,10 @@ class Meter:
             'acc': [],
             'prec': [],
             'pq': [],
+            'sq': [],
+            'dq': [],
             'aji': [],
-            'dice_2': []
+            'dice_2': [],
         }
 
     def update(self, targets, logits):
@@ -478,8 +489,15 @@ class Meter:
         prec = precision_score(preds, targets, num_classes=2)  # <<< TODO: Remove hardcoded num_classes
         self.metrics['prec'].append(prec)
 
-        pq = get_fast_pq(preds.long(), targets.long())
-        self.metrics['pq'].append(pq)
+        # pq = get_fast_pq(preds.long(), targets.long())
+        # self.metrics['pq'].append(pq[0][2])
+        # self.metrics['dq'].append(pq[0][0])
+        # self.metrics['sq'].append(pq[0][1])
+
+        pq = custom_pq_dq_sq(preds.long(), targets.long(), iou)
+        self.metrics['pq'].append(pq[0])
+        self.metrics['dq'].append(pq[1])
+        self.metrics['sq'].append(pq[2])
 
         aji = get_fast_aji(preds.long(), targets.long())
         self.metrics['aji'].append(aji)
@@ -500,15 +518,11 @@ class Meter:
         return self.metrics
 
     @staticmethod
-    def epoch_log(phase, epoch, epoch_loss, meter, start_time, fmt):
+    def epoch_log(epoch_loss, meter, start_time, fmt):
         """Logs and returns metrics
 
         Parameters
         ----------
-        phase : str
-            Phase of training
-        epoch : int
-            Current epoch number
         epoch_loss : float
             Current average epoch loss
         meter : Meter
@@ -534,4 +548,4 @@ class Meter:
         metric_string += f"in {delta_t}"
 
         logger.info(f"{metric_string}")
-        return metrics
+        return {'loss': epoch_loss, **metrics}
