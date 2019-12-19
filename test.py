@@ -1,6 +1,7 @@
 # Python STL
 import os
 import argparse
+import logging
 # Data Science
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,6 +20,8 @@ from torchseg.data import DATA_FOLDER
 from torchseg.model import model
 
 _DIRNAME = os.path.dirname(__file__)
+
+logger = logging.getLogger()
 
 
 class TestDataset(Dataset):
@@ -53,11 +56,14 @@ def cli():
     parser_args = parser.parse_args()
 
     # Validate provided args
-    if not os.path.isdir(os.path.join("torchseg", "checkpoints",
-                                      parser_args.checkpoint_path)):
-        raise FileNotFoundError("The checkpoints file {} was not found."
+    test_checkpoint_path = os.path.join("torchseg", "checkpoints",
+                                        parser_args.checkpoint_name)
+    if not os.path.exists(test_checkpoint_path):
+        raise FileNotFoundError("The checkpoints file at {} was not found."
                                 "Check the name again."
-                                .format(parser_args.checkpoint_name))
+                                .format(checkpoint_path))
+    else:
+        logger.info(f"Loading checkpoint file: {checkpoint_path}")
 
     return parser_args
 
