@@ -21,8 +21,6 @@ from torchseg.model import model
 
 _DIRNAME = os.path.dirname(__file__)
 
-logger = logging.getLogger()
-
 
 class TestDataset(Dataset):
     def __init__(self, data_folder, tta=4):
@@ -70,7 +68,10 @@ def cli():
 
 # TODO: Write code for overlapping window evaluation (replace downsampling)
 if __name__ == "__main__":
+    logger = logging.getLogger(__name__)
+
     args = cli()
+
     testset = TestDataset(DATA_FOLDER)
 
     device = torch.device("cuda")
@@ -83,7 +84,6 @@ if __name__ == "__main__":
     with torch.no_grad():
         for i, batch in enumerate(testset):
             batch = batch.unsqueeze(dim=0)
-            print(batch.shape)
             probs = torch.sigmoid(model(batch.to(device)))
             preds = (probs > 0.5).float()
             plt.imshow(preds.cpu().numpy().squeeze(), 'gray')

@@ -3,8 +3,7 @@ import os
 import sys
 import argparse
 import logging
-from logging.config import fileConfig
-import coloredlogs
+from logging.config import dictConfig
 # Data Science
 import matplotlib.pyplot as plt
 # PyTorch
@@ -15,12 +14,45 @@ from torchseg.model import model
 from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        },
+    },
+    'handlers': {
+        'default': {
+            'level': 'DEBUG',
+            'formatter': 'standard',
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',  # Default is stderr
+        },
+    },
+    'loggers': {
+        '': {  # root logger
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': False
+        },
+        'torchseg': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': False
+        },
+        '__main__': {  # if __name__ == '__main__'
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': False
+        },
+    }
+}
 
-# Load logging configuration from file
-fileConfig('logging_config.ini')
+# Load logging configuration from dict LOGGING_CONFIG
+dictConfig(LOGGING_CONFIG)
 # Create logger
-logger = logging.getLogger()
-coloredlogs.install(level='DEBUG', logger=logger)
+logger = logging.getLogger(__name__)
 
 
 def cli():
@@ -114,13 +146,8 @@ if __name__ == "__main__":
             logger.error(f"Error while saving checkpoint\n{e}")
         sys.exit(0)
 
-    # Get losses & scores from trainer
-    losses = model_trainer.losses
-    dice_scores = model_trainer.dice_scores
-    iou_scores = model_trainer.iou_scores
-
     # Helper function to plot scores
-    def plot(scores, name):
+    def metric_plot(scores, name):
         plt.figure(figsize=(15, 5))
         plt.plot(range(len(scores["train"])), scores["train"], label=f'train {name}')
         plt.plot(range(len(scores["val"])), scores["val"], label=f'val {name}')
@@ -130,7 +157,5 @@ if __name__ == "__main__":
         plt.legend()
         plt.show()
 
-    # Plot losses and scores
-    plot(losses, "Loss")
-    plot(dice_scores, "Dice score")
-    plot(iou_scores, "IoU score")
+    for metric_name, metric_values in model_trainer.holder.store.items():
+        metric_plot(metric_values, metric_name)
