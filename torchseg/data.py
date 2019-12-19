@@ -15,8 +15,6 @@ from albumentations.pytorch import ToTensorV2
 dirname = os.path.dirname(__file__)
 DATA_FOLDER = os.path.join(dirname, "dataset/raw/")
 
-logger = logging.getLogger()
-
 
 # TODO: Generalize binary segmentation to multiclass segmentation
 class OrganDataset(Dataset):
@@ -35,7 +33,8 @@ class OrganDataset(Dataset):
         class_dict : dict[int, int]
             Dictionary mapping brightness to class indices
         """
-        logger.info(f"Creating {phase} dataset ... ")
+        logger = logging.getLogger(__name__)
+        logger.info(f"Creating {phase} dataset")
 
         # Root folder of the dataset
         assert os.path.isdir(data_folder), "{} is not a directory or it doesn't exist.".format(data_folder)
@@ -184,7 +183,8 @@ def provider(data_folder, phase, batch_size=8, num_workers=4):
         DataLoader for loading data from CPU to GPU
     """
     image_dataset = OrganDataset(data_folder, phase)
-    logging.info(f"Creating {phase} dataloader ... ")
+    logger = logging.getLogger(__name__)
+    logger.info(f"Creating {phase} dataloader")
     dataloader = DataLoader(
         image_dataset,
         batch_size=batch_size,
