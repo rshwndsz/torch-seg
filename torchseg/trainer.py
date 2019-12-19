@@ -75,6 +75,7 @@ class Trainer(object):
 
         # Initialize losses & scores
         self.best_loss = float("inf")  # Very high best_loss for the first iteration
+        # TODO: Replace with a meter
         self.losses = {phase: [] for phase in self.phases}
         self.iou_scores = {phase: [] for phase in self.phases}
         self.dice_scores = {phase: [] for phase in self.phases}
@@ -152,13 +153,13 @@ class Trainer(object):
 
         # Calculate losses
         epoch_loss = running_loss / total_batches
-        dice, iou, acc, _ = Meter.epoch_log(phase, epoch, epoch_loss,
-                                            meter, start_time, _TIME_FMT)
+        metrics = Meter.epoch_log(phase, epoch, epoch_loss,
+                                  meter, start_time, _TIME_FMT)
         # Collect losses
         self.losses[phase].append(epoch_loss)
-        self.dice_scores[phase].append(dice)
-        self.iou_scores[phase].append(iou)
-        self.acc_scores[phase].append(acc)
+        self.dice_scores[phase].append(metrics['dice'])
+        self.iou_scores[phase].append(metrics['iou'])
+        self.acc_scores[phase].append(metrics['acc'])
 
         # Empty GPU cache
         torch.cuda.empty_cache()
