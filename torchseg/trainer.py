@@ -1,8 +1,7 @@
 # Python STL
-import time
 import os
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 # PyTorch
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -13,50 +12,9 @@ import torch.backends.cudnn as cudnn
 from .loss import MixedLoss
 from .data import provider
 from .data import DATA_FOLDER
-from .metrics import Meter
+from torchseg.storage import Meter
 
 _DIRNAME = os.path.dirname(__file__)
-_TIME_FMT = "%I:%M:%S %p"
-
-
-class Holder(object):
-    """An object to store values till end of training
-
-    Attributes
-    ----------
-    phases : tuple(str)
-        Phases of learning
-    scores : tuple(str)
-        Short names (keys as defined in Meter) of scores
-    store : dict{str, dict{str, list}}
-        Store list of values for each phase
-    """
-    def __init__(self,
-                 phases: Tuple[str, ...] = ('train', 'val'),
-                 scores: Tuple[str, ...] = ('loss', 'iou')):
-        self.phases: Tuple[str] = phases
-        self.scores: Tuple[str] = scores
-        self.store: Dict[Dict[str, List[float]]] = {
-            score: {
-                phase: [] for phase in self.phases
-            } for score in self.scores
-        }
-
-    def add(self, metrics, phase):
-        for score in self.store.keys():
-            try:
-                self.store[score][phase].append(metrics[score])
-            except KeyError:
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Key '{score}' not found. Skipping...", exc_info=True)
-                continue
-
-    def reset(self):
-        self.store: Dict[Dict[str, List[float]]] = {
-            score: {
-                phase: [] for phase in self.phases
-            } for score in self.scores
-        }
 
 
 class Trainer(object):
@@ -99,7 +57,7 @@ class Trainer(object):
         Dataloaders for each phase
     best_loss : float
         Best validation loss
-    holder : Holder
+    meter : Meter
         Object to store loss & scores
     """
     def __init__(self, model, args):
@@ -112,6 +70,7 @@ class Trainer(object):
         args : :obj:
             CLI arguments
         """
+
         # Set hyperparameters
         self.num_workers: int = args.num_workers  # Raise this if shared memory is high
         self.batch_size: Dict[str, int] = {"train": args.batch_size,
@@ -136,6 +95,7 @@ class Trainer(object):
         else:
             self.checkpoint_path = None
 
+        # Path where best model will be saved
         self.save_path: str = os.path.join(_DIRNAME, "checkpoints",
                                            args.save_fname)
 
@@ -165,13 +125,15 @@ class Trainer(object):
 
         # Initialize losses & scores
         self.best_loss: float = float("inf")  # Very high best_loss for the first iteration
-        self.holder = Holder(self.phases, scores=('loss', 'iou', 'dice',
-                                                  'dice_2', 'aji', 'prec',
-                                                  'pq', 'sq', 'dq'))
+        # TODO: Add all scores
+        # self.meter = Meter(self.phases, scores=('loss', 'iou', 'dice',
+        #                                         'dice_2', 'aji', 'prec',
+        #                                         'pq', 'sq', 'dq'))
+        self.meter = Meter(self.phases, scores=('loss', 'iou', 'dice', 'acc', 'prec'))
 
     def forward(self,
                 images: torch.Tensor,
-                targets: torch.Tensor):
+                targets: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass
 
         Parameters
@@ -189,15 +151,16 @@ class Trainer(object):
             Raw output of the NN, without any activation function
             in the last layer
         """
-        images = images.to(self.device)
-        masks = targets.to(self.device)
-        logits = self.net(images)
-        loss = self.criterion(logits, masks)
+
+        images: torch.Tensor = images.to(self.device)
+        masks: torch.Tensor = targets.to(self.device)
+        logits: torch.Tensor = self.net(images)
+        loss: torch.Tensor = self.criterion(logits, masks)
         return loss, logits
 
     def iterate(self,
                 epoch: int,
-                phase: str):
+                phase: str) -> float:
         """1 epoch in the life of a model
 
         Parameters
@@ -212,25 +175,25 @@ class Trainer(object):
         epoch_loss: float
             Average loss for the epoch
         """
-        # Initialize meter
-        meter = Meter(phase, epoch)
-        # Log epoch, phase and start time
-        start_time = time.strftime(_TIME_FMT, time.localtime())
-        logger = logging.getLogger(__name__)
-        logger.info(f"Starting epoch: {epoch} | phase: {phase} | ⏰: {start_time}")
 
-        # Set up model, loader and initialize losses
+        # Set model & dataloader based on phase
         self.net.train(phase == "train")
-        batch_size = self.batch_size[phase]
         dataloader = self.dataloaders[phase]
-        total_batches = len(dataloader)
-        running_loss = 0.0
+        total_batches: int = len(dataloader)
+
+        # ===ON_EPOCH_BEGIN===
+        self.meter.on_epoch_begin(epoch, phase)
 
         # Learning!
         self.optimizer.zero_grad()
         # TODO: Add progress bar
         for itr, batch in enumerate(dataloader):
+            # Load images and targets
             images, targets = batch
+
+            # ===ON_BATCH_BEGIN===
+            self.meter.on_batch_begin()
+
             # Forward pass
             loss, logits = self.forward(images, targets)
             if phase == "train":
@@ -238,32 +201,40 @@ class Trainer(object):
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-            # Get losses
+            # Update metrics for this batch
             with torch.no_grad():
-                running_loss += loss.item()
+                loss = loss.detach().cpu()
                 logits = logits.detach().cpu()
-                meter.update(targets, logits)
 
+                # ===ON_BATCH_CLOSE===
+                self.meter.on_batch_close(loss=loss,
+                                          logits=logits,
+                                          targets=targets)
+
+        # ===ON_EPOCH_CLOSE===
         # Collect loss & scores
-        epoch_loss = running_loss / total_batches
-        metrics = meter.epoch_log(epoch_loss, start_time, _TIME_FMT)
-        # Store epoch-wise loss and scores
-        # TODO: Move this spaghetti into Meter with hooks (ノಠ益ಠ)ノ彡┻━┻
-        self.holder.add(metrics, phase)
+        self.meter.on_epoch_close()
 
         # Empty GPU cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
         # Return average loss from the criterion for this epoch
-        return epoch_loss
+        return self.meter.store['loss'][phase][-1]
 
     def start(self):
         """Start the loops!"""
+
+        # ===ON_TRAIN_BEGIN===
+        self.meter.on_train_begin()
+
         for epoch in range(1, self.num_epochs + 1):    # <<< Change: Hardcoded starting epoch
             # Update current_epoch
-            self.current_epoch = epoch
+            self.current_epoch: int = epoch
+
             # Train model for 1 epoch
             self.iterate(epoch, "train")
+
             # Construct the state for a possible save later
             state = {
                 "epoch": epoch,
@@ -271,11 +242,14 @@ class Trainer(object):
                 "state_dict": self.net.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
             }
-            # Validate model for 1 epoch
+
+            # Validate model for `val_freq` epochs
             if epoch % self.val_freq == 0:
                 val_loss = self.iterate(epoch, "val")
+
                 # Step the scheduler based on validation loss
                 self.scheduler.step(val_loss)
+
                 # TODO: Add EarlyStopping
 
                 # Save model if validation loss is lesser than anything seen before
@@ -285,6 +259,11 @@ class Trainer(object):
                     state["best_loss"] = self.best_loss = val_loss
                     try:
                         torch.save(state, self.save_path)
-                    except FileNotFoundError as e:
+                    except FileNotFoundError:
                         logger.exception(f"Error while saving checkpoint", exc_info=True)
+
+            # Print newline
             print()
+
+        # ===ON_TRAIN_END===
+        self.meter.on_train_close()
