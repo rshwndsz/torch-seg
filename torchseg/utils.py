@@ -25,8 +25,8 @@ def nanmean(v: torch.Tensor,
     return v.sum(*args, **kwargs) / (~is_nan).float().sum(*args, **kwargs)
 
 
-def predict(probs: torch.FloatTensor,
-            threshold: float) -> torch.FloatTensor:
+def predict(probs: torch.Tensor,
+            threshold: float) -> torch.Tensor:
     """Thresholding probabilities
 
     Parameters
@@ -39,7 +39,7 @@ def predict(probs: torch.FloatTensor,
 
     Returns
     -------
-    predictions: torch.FloatTensor
+    predictions: torch.Tensor
         Thresholded probabilities
         Contains only 0, 1 and has the same shape as `probs`
     """
