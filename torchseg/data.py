@@ -88,7 +88,7 @@ class OrganDataset(Dataset):
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)  # <<<< Note: Hardcoded reading in Grayscale
         assert mask.size != 0, "cv2: Unable to load mask - {}".format(mask_path)
 
-        # TODO: Improve this spagetti (ノಠ益ಠ)ノ彡┻━┻
+        # TODO: Improve this spaghetti (ノಠ益ಠ)ノ彡┻━┻
         # Data Augmentation for image and mask
         augmented = self.transforms['aug'](image=image, mask=mask)
         new_image = self.transforms['img_only'](image=augmented['image'])
