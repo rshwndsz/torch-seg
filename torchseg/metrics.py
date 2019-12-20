@@ -1,8 +1,6 @@
 # Python STL
-from datetime import datetime
 import logging
-import time
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 # Data Science
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -20,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def dice_score(probs: torch.Tensor,
                targets: torch.Tensor,
-               threshold: float = 0.5) -> float:
+               threshold: float = 0.5) -> torch.Tensor:
     """Calculate Sorenson-Dice coefficient
 
     Parameters
@@ -35,7 +33,7 @@ def dice_score(probs: torch.Tensor,
 
     Returns
     -------
-    dice : float
+    dice : torch.Tensor
         Dice score
 
     See Also
@@ -58,7 +56,7 @@ def dice_score(probs: torch.Tensor,
         # Shape: [N, 1]
         dice = 2 * (p * t).sum(-1) / ((p + t).sum(-1))
 
-    return utils.nanmean(dice).item()
+    return utils.nanmean(dice)
 
 
 # TODO: Vectorize
@@ -171,7 +169,7 @@ def false_negative(preds: torch.Tensor,
 
 def precision_score(preds: torch.Tensor,
                     targets: torch.Tensor,
-                    num_classes: int = 2) -> float:
+                    num_classes: int = 2) -> torch.Tensor:
     """Computes precision score
 
     Parameters
@@ -185,20 +183,20 @@ def precision_score(preds: torch.Tensor,
 
     Returns
     -------
-    precision : (float, float)
-        Precision score for class 2
+    precision : Tuple[torch.Tensor, ...]
+        List of precision scores for each class
     """
     tp = true_positive(preds, targets, num_classes).to(torch.float)
     fp = false_positive(preds, targets, num_classes).to(torch.float)
     out = tp / (tp + fp)
     out[torch.isnan(out)] = 0
 
-    return out[1].item()  # <<< Change: Hardcoded for binary segmentation
+    return out
 
 
 def accuracy_score(preds: torch.Tensor,
                    targets: torch.Tensor,
-                   smooth: float = 1e-10) -> float:
+                   smooth: float = 1e-10) -> torch.Tensor:
     """Compute accuracy score
 
     Parameters
@@ -213,18 +211,18 @@ def accuracy_score(preds: torch.Tensor,
 
     Returns
     -------
-    acc : float
+    acc : torch.Tensor
         Average accuracy score
     """
     valids = (targets >= 0)
-    acc_sum = (valids * (preds == targets)).sum().item()
-    valid_sum = valids.sum().item()
-    return float(acc_sum) / (valid_sum + smooth)
+    acc_sum = (valids * (preds == targets)).sum().float()
+    valid_sum = valids.sum().float()
+    return acc_sum / (valid_sum + smooth)
 
 
 def iou_score(preds: torch.Tensor,
               targets: torch.Tensor,
-              smooth: float = 1e-7) -> float:
+              smooth: float = 1e-7) -> torch.Tensor:
     """Computes IoU or Jaccard index
 
     Parameters
@@ -239,14 +237,14 @@ def iou_score(preds: torch.Tensor,
 
     Returns
     -------
-    iou : float
+    iou : torch.Tensor
         IoU score or Jaccard index
     """
     intersection = torch.sum(targets * preds)
     union = torch.sum(targets) + torch.sum(preds) - intersection + smooth
     score = (intersection + smooth) / union
 
-    return score.item()
+    return score
 
 
 def get_fast_dice_2(pred: torch.Tensor,
@@ -460,7 +458,7 @@ def get_fast_aji(pred: torch.Tensor,
 
 def custom_pq_dq_sq(preds: torch.Tensor,
                     targets: torch.Tensor,
-                    iou: float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                    iou: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     tp: torch.Tensor = true_positive(preds, targets)[1]
     fp: torch.Tensor = false_positive(preds, targets, num_classes=2)[1]
     fn: torch.Tensor = false_negative(preds, targets, num_classes=2)[1]
@@ -469,119 +467,3 @@ def custom_pq_dq_sq(preds: torch.Tensor,
     sq = torch.tensor([iou]) / tp
     pq = dq * sq
     return pq, dq, sq
-
-
-class Meter:
-    """A meter to keep track of losses and scores"""
-
-    def __init__(self,
-                 phase: str,
-                 epoch: int):
-        self.base_threshold: float = 0.5
-        self.metrics: Dict[str, List] = {
-            'dice': [],
-            'iou': [],
-            'acc': [],
-            'prec': [],
-            'pq': [],
-            'sq': [],
-            'dq': [],
-            'aji': [],
-            'dice_2': [],
-        }
-
-    def update(self,
-               targets: torch.Tensor,
-               logits: torch.Tensor):
-        """Calculates metrics for each batch and updates meter
-
-        Parameters
-        ----------
-        targets : torch.Tensor
-            [N C H W]
-            Ground truths
-        logits : torch.Tensor
-            [N C H W]
-            Raw logits
-        """
-        probs: torch.Tensor = torch.sigmoid(logits)
-        preds: torch.Tensor = utils.predict(probs, self.base_threshold)
-
-        # Assertion for shapes
-        if not (preds.shape == targets.shape):
-            raise ValueError("Shape of preds: {} must be the same as that of targets: {}."
-                             .format(preds.shape, targets.shape))
-
-        # Calculate and add to metric lists
-        dice: float = dice_score(probs, targets, self.base_threshold)
-        self.metrics['dice'].append(dice)
-
-        iou: float = iou_score(preds, targets)
-        self.metrics['iou'].append(iou)
-
-        acc: float = accuracy_score(preds, targets)
-        self.metrics['acc'].append(acc)
-
-        prec: float = precision_score(preds, targets)
-        self.metrics['prec'].append(prec)
-
-        # pq = get_fast_pq(preds.long(), targets.long())
-        # self.metrics['pq'].append(pq[0][2])
-        # self.metrics['dq'].append(pq[0][0])
-        # self.metrics['sq'].append(pq[0][1])
-
-        pq = custom_pq_dq_sq(preds.long(), targets.long(), iou)
-        self.metrics['pq'].append(pq[0])
-        self.metrics['dq'].append(pq[1])
-        self.metrics['sq'].append(pq[2])
-
-        aji: float = get_fast_aji(preds.long(), targets.long())
-        self.metrics['aji'].append(aji)
-
-        dice_2: float = get_fast_dice_2(preds.long(), targets.long())
-        self.metrics['dice_2'].append(dice_2)
-
-    def get_metrics(self) -> Dict[str, List[float]]:
-        """Compute mean of batchwise metrics
-
-        Returns
-        -------
-        metrics : dict[str, float]
-            Mean of all metrics as a dictionary
-        """
-        self.metrics.update({key: np.nanmean(self.metrics[key])
-                             for key in self.metrics.keys()})
-        return self.metrics
-
-    def epoch_log(self,
-                  epoch_loss: float,
-                  start_time: str,
-                  fmt: str) -> Dict[str, float]:
-        """Logs and returns metrics
-
-        Parameters
-        ----------
-        epoch_loss : float
-            Current average epoch loss
-        start_time : str
-            Start time as a string
-        fmt : str
-            Formatting applied to `start_time`
-
-        Returns
-        -------
-        metrics : dict[str, float]
-            Dictionary of metrics
-        """
-        metrics = self.get_metrics()
-        end_time = time.strftime(fmt, time.localtime())
-        delta_t = (datetime.strptime(end_time, fmt) - datetime.strptime(start_time, fmt))
-
-        # Construct string for logging
-        metric_string = f"Loss: {epoch_loss:.4f} | "
-        for metric_name, metric_value in metrics.items():
-            metric_string += f"{metric_name}: {metric_value:.4f} | "
-        metric_string += f"in {delta_t}"
-
-        logger.info(f"{metric_string}")
-        return {'loss': epoch_loss, **metrics}
