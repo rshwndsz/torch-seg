@@ -1,6 +1,7 @@
 # Python STL
 import os
 import logging
+from typing import Callable, Dict
 # Image Processing
 import cv2
 # PyTorch
@@ -12,13 +13,17 @@ from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
 
 # Root folder of dataset
-dirname = os.path.dirname(__file__)
-DATA_FOLDER = os.path.join(dirname, "dataset/raw/")
+dirname: str = os.path.dirname(__file__)
+DATA_FOLDER: str = os.path.join(dirname, "dataset/raw/")
 
 
 # TODO: Generalize binary segmentation to multiclass segmentation
 class OrganDataset(Dataset):
-    def __init__(self, data_folder, phase, num_classes=2, class_dict=(0, 255)):
+    def __init__(self,
+                 data_folder: str,
+                 phase: str,
+                 num_classes: int = 2,
+                 class_dict: Dict[int, int] = (0, 255)):
         """Create an API for the dataset
 
         Parameters
@@ -69,7 +74,7 @@ class OrganDataset(Dataset):
                                      f"but class dict: {class_dict} specifies otherwise"
         self.class_dict = class_dict
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
         # Load image
         image_name = self.image_names[idx]
         image_path = os.path.join(self.root, self.phase, "imgs", image_name)
@@ -83,7 +88,7 @@ class OrganDataset(Dataset):
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)  # <<<< Note: Hardcoded reading in Grayscale
         assert mask.size != 0, "cv2: Unable to load mask - {}".format(mask_path)
 
-        # TODO: Improve this spagetti (ノಠ益ಠ)ノ彡┻━┻
+        # TODO: Improve this spaghetti (ノಠ益ಠ)ノ彡┻━┻
         # Data Augmentation for image and mask
         augmented = self.transforms['aug'](image=image, mask=mask)
         new_image = self.transforms['img_only'](image=augmented['image'])
@@ -100,7 +105,9 @@ class OrganDataset(Dataset):
         return len(self.image_names)
 
     @staticmethod
-    def get_transforms(phase):
+    def get_transforms(phase: str) -> Dict[str,
+                                           Callable[[torch.Tensor, ...],
+                                                    Dict[str, torch.Tensor]]]:
         """Get composed albumentations augmentations
 
         Parameters
@@ -162,7 +169,10 @@ class OrganDataset(Dataset):
         return transforms
 
 
-def provider(data_folder, phase, batch_size=8, num_workers=4):
+def provider(data_folder: str,
+             phase: str,
+             batch_size: int = 8,
+             num_workers: int = 4) -> object:
     """Return dataloader for the dataset
 
     Parameters

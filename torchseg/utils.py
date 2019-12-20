@@ -1,7 +1,10 @@
 import torch
 
 
-def nanmean(v, *args, inplace=False, **kwargs):
+def nanmean(v: torch.Tensor,
+            *args,
+            inplace: bool = False,
+            **kwargs):
     """Compute the arithmetic mean along the specified axis, ignoring NaNs
 
     Parameters
@@ -22,7 +25,8 @@ def nanmean(v, *args, inplace=False, **kwargs):
     return v.sum(*args, **kwargs) / (~is_nan).float().sum(*args, **kwargs)
 
 
-def predict(probs, threshold):
+def predict(probs: torch.FloatTensor,
+            threshold: float) -> torch.FloatTensor:
     """Thresholding probabilities
 
     Parameters

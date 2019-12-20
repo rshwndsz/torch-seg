@@ -2,6 +2,7 @@
 import time
 import os
 import logging
+from typing import Dict, List, Tuple
 # PyTorch
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -18,7 +19,6 @@ _DIRNAME = os.path.dirname(__file__)
 _TIME_FMT = "%I:%M:%S %p"
 
 
-# TODO: Add docs
 class Holder(object):
     """An object to store values till end of training
 
@@ -31,12 +31,14 @@ class Holder(object):
     store : dict{str, dict{str, list}}
         Store list of values for each phase
     """
-    def __init__(self, phases=('train', 'val'), scores=('loss', 'iou')):
-        self.phases = phases
-        self.scores = scores
-        self.store = {
+    def __init__(self,
+                 phases: Tuple[str, ...] = ('train', 'val'),
+                 scores: Tuple[str, ...] = ('loss', 'iou')):
+        self.phases: Tuple[str] = phases
+        self.scores: Tuple[str] = scores
+        self.store: Dict[Dict[str, List[float]]] = {
             score: {
-                phase: [] for phase in phases
+                phase: [] for phase in self.phases
             } for score in self.scores
         }
 
@@ -50,7 +52,7 @@ class Holder(object):
                 continue
 
     def reset(self):
-        self.store = {
+        self.store: Dict[Dict[str, List[float]]] = {
             score: {
                 phase: [] for phase in self.phases
             } for score in self.scores
@@ -111,13 +113,14 @@ class Trainer(object):
             CLI arguments
         """
         # Set hyperparameters
-        self.num_workers = args.num_workers  # Raise this if shared memory is high
-        self.batch_size = {"train": args.batch_size, "val": args.batch_size}
-        self.lr = args.lr  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
-        self.num_epochs = args.num_epochs
-        self.current_epoch = 0
-        self.phases = ["train", "val"]
-        self.val_freq = args.val_freq
+        self.num_workers: int = args.num_workers  # Raise this if shared memory is high
+        self.batch_size: Dict[str, int] = {"train": args.batch_size,
+                                           "val": args.batch_size}
+        self.lr: float = args.lr  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
+        self.num_epochs: int = args.num_epochs
+        self.current_epoch: int = 0
+        self.phases: Tuple[str, ...] = ("train", "val")
+        self.val_freq: int = args.val_freq
 
         # Torch-specific initializations
         if not torch.cuda.is_available():
@@ -128,13 +131,13 @@ class Trainer(object):
             torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
         if args.checkpoint_name is not None:
-            self.checkpoint_path = os.path.join(_DIRNAME, "checkpoints",
-                                                args.checkpoint_name)
+            self.checkpoint_path: str = os.path.join(_DIRNAME, "checkpoints",
+                                                     args.checkpoint_name)
         else:
             self.checkpoint_path = None
 
-        self.save_path = os.path.join(_DIRNAME, "checkpoints",
-                                      args.save_fname)
+        self.save_path: str = os.path.join(_DIRNAME, "checkpoints",
+                                           args.save_fname)
 
         # Model, loss, optimizer & scheduler
         self.net = model
@@ -161,12 +164,14 @@ class Trainer(object):
         }
 
         # Initialize losses & scores
-        self.best_loss = float("inf")  # Very high best_loss for the first iteration
+        self.best_loss: float = float("inf")  # Very high best_loss for the first iteration
         self.holder = Holder(self.phases, scores=('loss', 'iou', 'dice',
                                                   'dice_2', 'aji', 'prec',
                                                   'pq', 'sq', 'dq'))
 
-    def forward(self, images, targets):
+    def forward(self,
+                images: torch.Tensor,
+                targets: torch.Tensor):
         """Forward pass
 
         Parameters
@@ -190,7 +195,9 @@ class Trainer(object):
         loss = self.criterion(logits, masks)
         return loss, logits
 
-    def iterate(self, epoch, phase):
+    def iterate(self,
+                epoch: int,
+                phase: str):
         """1 epoch in the life of a model
 
         Parameters
@@ -239,8 +246,9 @@ class Trainer(object):
 
         # Collect loss & scores
         epoch_loss = running_loss / total_batches
-        metrics = Meter.epoch_log(epoch_loss, meter, start_time, _TIME_FMT)
+        metrics = meter.epoch_log(epoch_loss, start_time, _TIME_FMT)
         # Store epoch-wise loss and scores
+        # TODO: Move this spaghetti into Meter with hooks (ノಠ益ಠ)ノ彡┻━┻
         self.holder.add(metrics, phase)
 
         # Empty GPU cache

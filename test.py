@@ -2,6 +2,7 @@
 import os
 import argparse
 import logging
+from typing import List
 # Data Science
 import matplotlib.pyplot as plt
 # Image processing
@@ -34,8 +35,8 @@ class TestDataset(Dataset):
         Albumentations augmentations pipeline
     """
     def __init__(self, data_folder):
-        self.root = data_folder
-        self.image_names = sorted(os.listdir(os.path.join(self.root, "test", "imgs")))
+        self.root: str = data_folder
+        self.image_names: List[str] = sorted(os.listdir(os.path.join(self.root, "test", "imgs")))
         self.transform = Compose(
             [
                 T.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), p=1),
@@ -44,9 +45,9 @@ class TestDataset(Dataset):
             ]
         )
 
-    def __getitem__(self, idx):
-        image_name = self.image_names[idx]
-        image_path = os.path.join(self.root, "test", "imgs", image_name)
+    def __getitem__(self, idx: int):
+        image_name: str = self.image_names[idx]
+        image_path: str = os.path.join(self.root, "test", "imgs", image_name)
         image = cv2.imread(image_path)
         images = self.transform(image=image)["image"]
         return images
@@ -64,8 +65,8 @@ def cli():
     parser_args = parser.parse_args()
 
     # Validate provided args
-    test_checkpoint_path = os.path.join("torchseg", "checkpoints",
-                                        parser_args.checkpoint_name)
+    test_checkpoint_path: str = os.path.join("torchseg", "checkpoints",
+                                             parser_args.checkpoint_name)
     if not os.path.exists(test_checkpoint_path):
         raise FileNotFoundError("The checkpoints file at {} was not found."
                                 "Check the name again."

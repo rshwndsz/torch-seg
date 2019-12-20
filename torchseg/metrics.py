@@ -2,6 +2,7 @@
 from datetime import datetime
 import logging
 import time
+from typing import Dict, List, Tuple
 # Data Science
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -17,7 +18,9 @@ logger = logging.getLogger(__name__)
 # TODO: Add tests to test integrity
 
 
-def dice_score(probs, targets, threshold=0.5):
+def dice_score(probs: torch.Tensor,
+               targets: torch.Tensor,
+               threshold: float = 0.5) -> float:
     """Calculate Sorenson-Dice coefficient
 
     Parameters
@@ -40,7 +43,7 @@ def dice_score(probs, targets, threshold=0.5):
         https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     """
 
-    batch_size = targets.shape[0]
+    batch_size: int = targets.shape[0]
     with torch.no_grad():
         # Shape: [N, C, H, W]targets
         probs = probs.view(batch_size, -1)
@@ -58,7 +61,10 @@ def dice_score(probs, targets, threshold=0.5):
     return utils.nanmean(dice).item()
 
 
-def true_positive(preds, targets, num_classes=2):
+# TODO: Vectorize
+def true_positive(preds: torch.Tensor,
+                  targets: torch.Tensor,
+                  num_classes: int = 2) -> torch.Tensor:
     """Compute number of true positive predictions
 
     Parameters
@@ -75,14 +81,17 @@ def true_positive(preds, targets, num_classes=2):
     tp : torch.Tensor
         Tensor of number of true positives for each class
     """
-    out = []
+    out: List[torch.Tensor] = []
     for i in range(num_classes):
         out.append(((preds == i) & (targets == i)).sum())
 
     return torch.tensor(out)
 
 
-def true_negative(preds, targets, num_classes):
+# TODO: Vectorize
+def true_negative(preds: torch.Tensor,
+                  targets: torch.Tensor,
+                  num_classes: int) -> torch.Tensor:
     """Computes number of true negative predictions
 
     Parameters
@@ -99,14 +108,17 @@ def true_negative(preds, targets, num_classes):
     tn : torch.Tensor
         Tensor of true negatives for each class
     """
-    out = []
+    out: List[torch.Tensor] = []
     for i in range(num_classes):
         out.append(((preds != i) & (targets != i)).sum())
 
     return torch.tensor(out)
 
 
-def false_positive(preds, targets, num_classes):
+# TODO: Vectorize
+def false_positive(preds: torch.Tensor,
+                   targets: torch.Tensor,
+                   num_classes: int) -> torch.Tensor:
     """Computes number of false positive predictions
 
     Parameters
@@ -123,14 +135,17 @@ def false_positive(preds, targets, num_classes):
     fp : torch.Tensor
         Tensor of false positives for each class
     """
-    out = []
+    out: List[torch.Tensor] = []
     for i in range(num_classes):
         out.append(((preds == i) & (targets != i)).sum())
 
     return torch.tensor(out)
 
 
-def false_negative(preds, targets, num_classes):
+# TODO: Vectorize
+def false_negative(preds: torch.Tensor,
+                   targets: torch.Tensor,
+                   num_classes: int) -> torch.Tensor:
     """Computes number of false negative predictions
 
     Parameters
@@ -147,14 +162,16 @@ def false_negative(preds, targets, num_classes):
     fn : torch.Tensor
         Tensor of false negatives for each class
     """
-    out = []
+    out: List[torch.Tensor] = []
     for i in range(num_classes):
         out.append(((preds != i) & (targets == i)).sum())
 
     return torch.tensor(out)
 
 
-def precision_score(preds, targets, num_classes):
+def precision_score(preds: torch.Tensor,
+                    targets: torch.Tensor,
+                    num_classes: int = 2) -> float:
     """Computes precision score
 
     Parameters
@@ -179,7 +196,9 @@ def precision_score(preds, targets, num_classes):
     return out[1].item()  # <<< Change: Hardcoded for binary segmentation
 
 
-def accuracy_score(preds, targets):
+def accuracy_score(preds: torch.Tensor,
+                   targets: torch.Tensor,
+                   smooth: float = 1e-10) -> float:
     """Compute accuracy score
 
     Parameters
@@ -188,6 +207,9 @@ def accuracy_score(preds, targets):
         Predictions
     targets : torch.Tensor
         Ground truths
+    smooth: float
+        Smoothing for numerical stability
+        1e-10 by default
 
     Returns
     -------
@@ -197,10 +219,12 @@ def accuracy_score(preds, targets):
     valids = (targets >= 0)
     acc_sum = (valids * (preds == targets)).sum().item()
     valid_sum = valids.sum().item()
-    return float(acc_sum) / (valid_sum + 1e-10)    # <<< Change: Hardcoded smoothing
+    return float(acc_sum) / (valid_sum + smooth)
 
 
-def iou_score(preds, targets):
+def iou_score(preds: torch.Tensor,
+              targets: torch.Tensor,
+              smooth: float = 1e-7) -> float:
     """Computes IoU or Jaccard index
 
     Parameters
@@ -209,22 +233,25 @@ def iou_score(preds, targets):
         Predictions
     targets : torch.Tensor
         Ground truths
+    smooth: float
+        Smoothing for numerical stability
+        1e-10 by default
+
     Returns
     -------
     iou : float
         IoU score or Jaccard index
     """
     intersection = torch.sum(targets * preds)
-    union = torch.sum(targets) + torch.sum(preds) - intersection + 1e-7
-    score = (intersection + 1e-7) / union
+    union = torch.sum(targets) + torch.sum(preds) - intersection + smooth
+    score = (intersection + smooth) / union
 
     return score.item()
 
 
-def get_fast_dice_2(pred, true):
-    """
-        Ensemble dice
-    """
+def get_fast_dice_2(pred: torch.Tensor,
+                    true: torch.Tensor) -> float:
+    """Ensemble dice"""
     true = np.copy(true)
     pred = np.copy(pred)
     true_id = list(np.unique(true))
@@ -262,7 +289,9 @@ def get_fast_dice_2(pred, true):
     return 2 * overall_inter / overall_total
 
 
-def get_fast_pq(pred, true, match_iou=0.5):
+def get_fast_pq(pred: torch.Tensor,
+                true: torch.Tensor,
+                match_iou: float = 0.5) -> Tuple[List[float], List[List]]:
     """
     `match_iou` is the IoU threshold level to determine the pairing between
     GT instances `p` and prediction instances `g`. `p` and `g` is a pair
@@ -358,7 +387,8 @@ def get_fast_pq(pred, true, match_iou=0.5):
     return [dq, sq, dq * sq], [paired_true, paired_pred, unpaired_true, unpaired_pred]
 
 
-def get_fast_aji(pred, true):
+def get_fast_aji(pred: torch.Tensor,
+                 true: torch.Tensor) -> float:
     """
     AJI version distributed by MoNuSeg, has no permutation problem but suffered from
     over-penalisation similar to DICE2
@@ -428,13 +458,15 @@ def get_fast_aji(pred, true):
     return aji_score
 
 
-def custom_pq_dq_sq(preds, targets, iou):
-    tp = true_positive(preds, targets)[1]
-    fp = false_positive(preds, targets, num_classes=2)[1]
-    fn = false_negative(preds, targets, num_classes=2)[1]
+def custom_pq_dq_sq(preds: torch.Tensor,
+                    targets: torch.Tensor,
+                    iou: float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    tp: torch.Tensor = true_positive(preds, targets)[1]
+    fp: torch.Tensor = false_positive(preds, targets, num_classes=2)[1]
+    fn: torch.Tensor = false_negative(preds, targets, num_classes=2)[1]
 
     dq = tp / (tp + 0.5*fp + 0.5*fn)
-    sq = iou / tp
+    sq = torch.tensor([iou]) / tp
     pq = dq * sq
     return pq, dq, sq
 
@@ -442,9 +474,11 @@ def custom_pq_dq_sq(preds, targets, iou):
 class Meter:
     """A meter to keep track of losses and scores"""
 
-    def __init__(self, phase, epoch):
-        self.base_threshold = 0.5
-        self.metrics = {
+    def __init__(self,
+                 phase: str,
+                 epoch: int):
+        self.base_threshold: float = 0.5
+        self.metrics: Dict[str, List] = {
             'dice': [],
             'iou': [],
             'acc': [],
@@ -456,7 +490,9 @@ class Meter:
             'dice_2': [],
         }
 
-    def update(self, targets, logits):
+    def update(self,
+               targets: torch.Tensor,
+               logits: torch.Tensor):
         """Calculates metrics for each batch and updates meter
 
         Parameters
@@ -468,8 +504,8 @@ class Meter:
             [N C H W]
             Raw logits
         """
-        probs = torch.sigmoid(logits)
-        preds = utils.predict(probs, self.base_threshold)
+        probs: torch.Tensor = torch.sigmoid(logits)
+        preds: torch.Tensor = utils.predict(probs, self.base_threshold)
 
         # Assertion for shapes
         if not (preds.shape == targets.shape):
@@ -477,16 +513,16 @@ class Meter:
                              .format(preds.shape, targets.shape))
 
         # Calculate and add to metric lists
-        dice = dice_score(probs, targets, self.base_threshold)
+        dice: float = dice_score(probs, targets, self.base_threshold)
         self.metrics['dice'].append(dice)
 
-        iou = iou_score(preds, targets)
+        iou: float = iou_score(preds, targets)
         self.metrics['iou'].append(iou)
 
-        acc = accuracy_score(preds, targets)
+        acc: float = accuracy_score(preds, targets)
         self.metrics['acc'].append(acc)
 
-        prec = precision_score(preds, targets, num_classes=2)  # <<< TODO: Remove hardcoded num_classes
+        prec: float = precision_score(preds, targets)
         self.metrics['prec'].append(prec)
 
         # pq = get_fast_pq(preds.long(), targets.long())
@@ -499,34 +535,34 @@ class Meter:
         self.metrics['dq'].append(pq[1])
         self.metrics['sq'].append(pq[2])
 
-        aji = get_fast_aji(preds.long(), targets.long())
+        aji: float = get_fast_aji(preds.long(), targets.long())
         self.metrics['aji'].append(aji)
 
-        dice_2 = get_fast_dice_2(preds.long(), targets.long())
+        dice_2: float = get_fast_dice_2(preds.long(), targets.long())
         self.metrics['dice_2'].append(dice_2)
 
-    def get_metrics(self):
+    def get_metrics(self) -> Dict[str, List[float]]:
         """Compute mean of batchwise metrics
 
         Returns
         -------
-        self.metrics : dict[str, float]
+        metrics : dict[str, float]
             Mean of all metrics as a dictionary
         """
         self.metrics.update({key: np.nanmean(self.metrics[key])
                              for key in self.metrics.keys()})
         return self.metrics
 
-    @staticmethod
-    def epoch_log(epoch_loss, meter, start_time, fmt):
+    def epoch_log(self,
+                  epoch_loss: float,
+                  start_time: str,
+                  fmt: str) -> Dict[str, float]:
         """Logs and returns metrics
 
         Parameters
         ----------
         epoch_loss : float
             Current average epoch loss
-        meter : Meter
-            Meter object holding metrics for current epoch
         start_time : str
             Start time as a string
         fmt : str
@@ -537,7 +573,7 @@ class Meter:
         metrics : dict[str, float]
             Dictionary of metrics
         """
-        metrics = meter.get_metrics()
+        metrics = self.get_metrics()
         end_time = time.strftime(fmt, time.localtime())
         delta_t = (datetime.strptime(end_time, fmt) - datetime.strptime(start_time, fmt))
 

@@ -4,10 +4,11 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-def dice_loss(logits, target):
+def dice_loss(logits: torch.Tensor,
+              target: torch.Tensor,
+              smooth: float = 1e-7) -> torch.Tensor:
     # See: https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     probs = torch.sigmoid(logits)
-    smooth = 1e-7  # <<<<<<<<<<<<< Note: Hardcoded smoothing
     iflat = probs.view(-1)
     tflat = target.view(-1)
     intersection = (iflat * tflat).sum()
@@ -20,7 +21,9 @@ class FocalLoss(nn.Module):
         super().__init__()
         self.gamma = gamma
 
-    def forward(self, logits, target):
+    def forward(self,
+                logits: torch.Tensor,
+                target: torch.Tensor) -> torch.Tensor:
         if not (target.size() == logits.size()):
             raise ValueError("Target size ({}) must be the same as input size ({})"
                              .format(target.size(), logits.size()))
@@ -39,6 +42,8 @@ class MixedLoss(nn.Module):
         self.alpha = alpha
         self.focal = FocalLoss(gamma)
 
-    def forward(self, logits, target):
+    def forward(self,
+                logits: torch.Tensor,
+                target: torch.Tensor) -> torch.Tensor:
         loss = self.alpha * self.focal(logits, target) - torch.log(dice_loss(logits, target))
         return loss.mean()
