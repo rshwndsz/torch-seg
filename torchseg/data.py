@@ -1,14 +1,14 @@
 # Python STL
 import os
 import logging
-from typing import Callable, Dict
+from typing import Dict
 # Image Processing
 import cv2
 # PyTorch
 import torch
-from torch.utils.data import DataLoader, Dataset, sampler
+from torch.utils.data import DataLoader, Dataset
 # Data augmentation
-from albumentations.augmentations import transforms as T
+from albumentations.augmentations import transforms as tf
 from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
 
@@ -105,9 +105,7 @@ class OrganDataset(Dataset):
         return len(self.image_names)
 
     @staticmethod
-    def get_transforms(phase: str) -> Dict[str,
-                                           Callable[[torch.Tensor, ...],
-                                                    Dict[str, torch.Tensor]]]:
+    def get_transforms(phase: str) -> Dict[str, Compose]:
         """Get composed albumentations augmentations
 
         Parameters
@@ -126,35 +124,35 @@ class OrganDataset(Dataset):
         if phase == "train":
             # Data augmentation for training only
             aug_transforms.extend([
-                T.ShiftScaleRotate(
+                tf.ShiftScaleRotate(
                     shift_limit=0,
                     scale_limit=0.1,
                     rotate_limit=15,
                     p=0.5),
-                T.Flip(p=0.5),
-                T.RandomRotate90(p=0.5),
+                tf.Flip(p=0.5),
+                tf.RandomRotate90(p=0.5),
             ])
             # Exotic Augmentations for train only 🤤
             aug_transforms.extend([
-                T.RandomBrightnessContrast(p=0.5),
-                T.ElasticTransform(p=0.5),
-                T.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
+                tf.RandomBrightnessContrast(p=0.5),
+                tf.ElasticTransform(p=0.5),
+                tf.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
             ])
         aug_transforms.extend([
-            T.RandomSizedCrop(min_max_height=(256, 256),
-                              height=256,
-                              width=256,
-                              w2h_ratio=1.0,
-                              interpolation=cv2.INTER_LINEAR,
-                              p=1.0),
+            tf.RandomSizedCrop(min_max_height=(256, 256),
+                               height=256,
+                               width=256,
+                               w2h_ratio=1.0,
+                               interpolation=cv2.INTER_LINEAR,
+                               p=1.0),
         ])
         aug_transforms = Compose(aug_transforms)
 
         mask_only_transforms = Compose([
-            T.Normalize(mean=0, std=1, always_apply=True)
+            tf.Normalize(mean=0, std=1, always_apply=True)
         ])
         image_only_transforms = Compose([
-            T.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), always_apply=True)
+            tf.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), always_apply=True)
         ])
         final_transforms = Compose([
             ToTensorV2()
