@@ -172,5 +172,5 @@ if __name__ == "__main__":
         plt.legend()
         plt.show()
 
-    for metric_name, metric_values in model_trainer.holder.store.items():
+    for metric_name, metric_values in model_trainer.meter.store.items():
         metric_plot(metric_values, metric_name)
