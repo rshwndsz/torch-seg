@@ -1,7 +1,7 @@
 # Python STL
 import os
 import logging
-from typing import Dict
+from typing import Callable, Dict
 # Image Processing
 import cv2
 # PyTorch
@@ -105,7 +105,9 @@ class OrganDataset(Dataset):
         return len(self.image_names)
 
     @staticmethod
-    def get_transforms(phase: str) -> Dict[object]:
+    def get_transforms(phase: str) -> Dict[str,
+                                           Callable[[torch.Tensor, ...],
+                                                    Dict[str, torch.Tensor]]]:
         """Get composed albumentations augmentations
 
         Parameters
