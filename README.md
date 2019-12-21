@@ -24,7 +24,7 @@ conda install -c conda conda-env
 To create a new environment and install required packages available on conda, run
 
 ```console
-$ conda env create
+$ conda env create --file environment.yml 
 Fetching package metadata: ...
 Solving package specifications: .Linking packages ...
 [      COMPLETE      ] |#################################################| 100%
