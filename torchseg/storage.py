@@ -1,10 +1,7 @@
 # Python STL
-import time
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, List, Tuple
-# Data Science
-import numpy as np
 # PyTorch
 import torch
 
@@ -15,7 +12,7 @@ from torchseg import metrics
 
 # TODO: Move to an event system
 # TODO: Have a better way to add metrics & associated functions
-# See: https://stackoverflow.com/questions/1092531/event-system-in-python/1096614#1096614
+# See: https://stackoverflow.com/questions/1092531/event-system-in-python/
 
 class Meter(object):
     def __init__(self,
@@ -46,9 +43,12 @@ class Meter(object):
 
         # Log epoch, phase and start time
         self.epoch_start_time: datetime = datetime.now()
+        epoch_start_time_string = datetime.strftime(self.epoch_start_time,
+                                                    '%I:%M:%S %p')
         logger = logging.getLogger(__name__)
-        logger.info(f"Starting epoch: {current_epoch} | phase: {current_phase} | "
-                    f"@ {datetime.strftime(self.epoch_start_time, '%I:%M:%S %p')}")
+        logger.info(f"Starting epoch: {current_epoch} | "
+                    f"phase: {current_phase} | "
+                    f"@ {epoch_start_time_string}")
 
         # Initialize metrics
         self.metrics: Dict[str, List] = {
@@ -72,14 +72,15 @@ class Meter(object):
 
         # Assertion for shapes
         if not (preds.shape == targets.shape):
-            raise ValueError("Shape of preds: {} must be the same as that of targets: {}."
-                             .format(preds.shape, targets.shape))
+            raise ValueError(f"Shape of preds: {preds.shape} must be the same "
+                             f"as that of targets: {targets.shape}.")
 
         # Add loss to list
         self.metrics['loss'].append(loss)
 
         # Calculate and add to metric lists
-        dice: torch.Tensor = metrics.dice_score(probs, targets, self.base_threshold)
+        dice: torch.Tensor = metrics.dice_score(probs, targets,
+                                                self.base_threshold)
         self.metrics['dice'].append(dice)
 
         iou: torch.Tensor = metrics.iou_score(preds, targets)
@@ -88,14 +89,16 @@ class Meter(object):
         acc: torch.Tensor = metrics.accuracy_score(preds, targets)
         self.metrics['acc'].append(acc)
 
-        prec: torch.Tensor = metrics.precision_score(preds, targets)[1]  # <<< Change: Hardcoded for binary segmentation
+        # <<< Change: Hardcoded for binary segmentation
+        prec: torch.Tensor = metrics.precision_score(preds, targets)[1]
         self.metrics['prec'].append(prec)
 
     def on_epoch_close(self):
 
         # Average over metrics obtained for every batch in the current epoch
-        self.metrics.update({key: [utils.nanmean(torch.tensor(self.metrics[key])).item()]
-                             for key in self.metrics.keys()})
+        self.metrics.update({key: [
+            utils.nanmean(torch.tensor(self.metrics[key])).item()
+        ] for key in self.metrics.keys()})
 
         # Compute time taken to complete the epoch
         epoch_end_time: datetime = datetime.now()
@@ -104,7 +107,7 @@ class Meter(object):
         # Construct string for logging
         metric_string: str = f""
         for metric_name, metric_value in self.metrics.items():
-            metric_string += f"{metric_name}: {metric_value:.4f} | "
+            metric_string += f"{metric_name}: {metric_value[0]:.4f} | "
         metric_string += f"in {delta_t.seconds}s"
 
         # Log metrics & time taken
@@ -112,14 +115,14 @@ class Meter(object):
         logger.info(f"{metric_string}")
 
         # Put metrics for this epoch in long term (complete training) storage
-        for score in self.store.keys():
+        for s in self.store.keys():
             try:
-                self.store[score][self.current_phase].extend(self.metrics[score])
+                self.store[s][self.current_phase].extend(self.metrics[s])
             except KeyError:
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Key '{score}' not found. Skipping...",
+                logger.warning(f"Key '{s}' not found. Skipping...",
                                exc_info=True)
                 continue
 
-    def on_train_close(self, *args, **kwargs):
+    def on_train_close(self):
         pass

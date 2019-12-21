@@ -1,19 +1,24 @@
 # Python STL
 import os
 import sys
-import argparse
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import logging
 from logging.config import dictConfig
 # Data Science
 import matplotlib.pyplot as plt
 # PyTorch
 import torch
+# Fancy logs
+import coloredlogs
 
 # Local
 from torchseg.model import model
 from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
+
+# TODO: Add logging to a file
+# Bland
 LOGGING_CONFIG = {
     'version': 1,
     'disable_existing_loggers': True,
@@ -50,21 +55,59 @@ LOGGING_CONFIG = {
     }
 }
 
-# Load logging configuration from dict LOGGING_CONFIG
-dictConfig(LOGGING_CONFIG)
+# Colourful 🌈
+C_LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'loggers': {
+        '': {
+           'level': 'DEBUG',
+           'handlers': ['console']
+        },
+    },
+    'formatters': {
+        'colored_console': {
+            '()': 'coloredlogs.ColoredFormatter',
+            'format': "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            'datefmt': '%H:%M:%S'},
+        'format_for_file': {
+            'format': "%(asctime)s :: %(levelname)s :: %(funcName)s in "
+                      "%(filename)s (l:%(lineno)d) :: %(message)s",
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'colored_console',
+            'stream': 'ext://sys.stdout'
+        },
+    },
+}
+
+# Load logging configuration (C_LOGGING => colour, LOGGING_CONFIG => plain)
+dictConfig(C_LOGGING)
+
 # Create logger
 logger = logging.getLogger(__name__)
+# Add colour
+coloredlogs.install(fmt=C_LOGGING['formatters']['colored_console']['format'],
+                    stream=sys.stdout,
+                    level='DEBUG', logger=logger)
 
 
 def cli():
-    parser = argparse.ArgumentParser(description='Torchseg')
+    parser = ArgumentParser(description='Torchseg',
+                            formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
                         nargs="?", default=None, const="model.pth",
-                        help='Name of checkpoint file inside torchseg/checkpoints/')
+                        help='Name of checkpoint file in torchseg/checkpoints/')
     parser.add_argument('-s', '--save', dest='save_fname', type=str,
                         default="model-saved.pth",
                         help="File in checkpoints/ to save state")
-    parser.add_argument('-p', '--pretrained', dest='pretrained', action="store_true",
+    parser.add_argument('-p', '--pretrained', dest='pretrained',
+                        action="store_true",
                         help="Load imagenet weights or not")
     parser.set_defaults(feature=True)
     parser.add_argument('-b', '--batch_size', dest="batch_size", type=int,
@@ -158,14 +201,21 @@ if __name__ == "__main__":
                                            "checkpoints", args.save_fname))
         except FileNotFoundError as e:
             logger.exception(f"Error while saving checkpoint", exc_info=True)
+        else:
+            logger.info("Saved 🎉")
+
         sys.exit(0)
 
     # Helper function to plot scores
     # TODO: Use subplots
     def metric_plot(scores, name):
         plt.figure(figsize=(15, 5))
-        plt.plot(range(len(scores["train"])), scores["train"], label=f'train {name}')
-        plt.plot(range(len(scores["val"])), scores["val"], label=f'val {name}')
+        plt.plot(range(len(scores["train"])),
+                 scores["train"],
+                 label=f'train {name}')
+        plt.plot(range(len(scores["val"])),
+                 scores["val"],
+                 label=f'val {name}')
         plt.title(f'{name} plot')
         plt.xlabel('Epoch')
         plt.ylabel(f'{name}')

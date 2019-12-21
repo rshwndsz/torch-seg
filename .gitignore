@@ -131,8 +131,9 @@ dmypy.json
 # Mac specific
 .DS_Store
 
-# IDE: PyCharm
+# IDEs
 .idea/
+.vscode/
 
 # Dataset
 */dataset/raw/*

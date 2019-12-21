@@ -11,7 +11,7 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 # Data Augmentations
-from albumentations.augmentations import transforms as T
+from albumentations.augmentations import transforms as tf
 from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
 
@@ -36,11 +36,13 @@ class TestDataset(Dataset):
     """
     def __init__(self, data_folder):
         self.root: str = data_folder
-        self.image_names: List[str] = sorted(os.listdir(os.path.join(self.root, "test", "imgs")))
+        self.image_names: List[str] = sorted(os.listdir(os.path.join(self.root,
+                                                                     "test",
+                                                                     "imgs")))
         self.transform = Compose(
             [
-                T.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), p=1),
-                T.Resize(256, 256),
+                tf.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), p=1),
+                tf.Resize(256, 256),
                 ToTensorV2(),
             ]
         )
@@ -60,7 +62,7 @@ def cli():
     parser = argparse.ArgumentParser(description='Torchseg')
     parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
                         default="model.pth",
-                        help='Name of checkpoint file inside torchseg/checkpoints/')
+                        help='Name of checkpoint file in torchseg/checkpoints/')
 
     parser_args = parser.parse_args()
 
@@ -109,8 +111,10 @@ if __name__ == "__main__":
             probs = torch.sigmoid(model(batch.to(device)))
             preds = (probs > 0.5).float()
             fig, ax = plt.subplots(2, 1)
-            ax[0].imshow(preds.cpu().numpy().squeeze(), 'gray')
-            ax[1].imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0), 'gray')
+            ax[0].imshow(preds.cpu().numpy().squeeze(),
+                         'gray')
+            ax[1].imshow(batch.cpu().numpy().squeeze().transpose(1, 2, 0),
+                         'gray')
             ax[0].set_title("Prediction")
             ax[1].set_title("Image")
             plt.show()
