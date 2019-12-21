@@ -120,6 +120,7 @@ class Trainer(object):
                 phase=phase,
                 batch_size=self.batch_size[phase],
                 num_workers=self.num_workers,
+                cli_args=args
             )
             for phase in self.phases
         }
@@ -183,6 +184,7 @@ class Trainer(object):
 
         # Learning!
         self.optimizer.zero_grad()
+
         # TODO: Add progress bar
         for itr, batch in enumerate(dataloader):
             # Load images and targets
@@ -205,8 +207,7 @@ class Trainer(object):
 
                 # ===ON_BATCH_CLOSE===
                 self.meter.on_batch_close(loss=loss,
-                                          logits=logits,
-                                          targets=targets)
+                                          logits=logits, targets=targets)
 
         # ===ON_EPOCH_CLOSE===
         # Collect loss & scores
