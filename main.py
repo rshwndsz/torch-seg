@@ -17,7 +17,6 @@ from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
 
-# TODO: Add logging to a file
 # Bland
 LOGGING_CONFIG = {
     'version': 1,
@@ -100,6 +99,7 @@ coloredlogs.install(fmt=C_LOGGING['formatters']['colored_console']['format'],
 def cli():
     parser = ArgumentParser(description='Torchseg',
                             formatter_class=ArgumentDefaultsHelpFormatter)
+    # Pre-training based
     parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
                         nargs="?", default=None, const="model.pth",
                         help='Name of checkpoint file in torchseg/checkpoints/')
@@ -110,6 +110,7 @@ def cli():
                         action="store_true",
                         help="Load imagenet weights or not")
     parser.set_defaults(feature=True)
+    # Training loop based
     parser.add_argument('-b', '--batch_size', dest="batch_size", type=int,
                         default=32,
                         help='Batch size')
@@ -125,6 +126,12 @@ def cli():
     parser.add_argument('-v', '--val_freq', dest='val_freq', type=int,
                         default=5,
                         help='Validation frequency')
+    # Image based
+    parser.add_argument('--image_size', dest='image_size', type=int,
+                        default=256, help='Resize images to size: s*s')
+    parser.add_argument('--in_channels', dest='in_channels', type=int,
+                        default=3,
+                        help='Number of channels in input image')
 
     parser_args = parser.parse_args()
 
@@ -172,6 +179,19 @@ def cli():
     else:
         logger.info(f"Validation frequency: {parser_args.val_freq} epochs")
 
+    if not parser_args.image_size > 0:
+        raise ValueError("Image size must be a positive non-zero integer.")
+    else:
+        logger.info(f"Images will be resized to "
+                    f"({parser_args.image_size}, {parser_args.image_size})")
+
+    if not parser_args.in_channels > 0 and parser_args.in_channels < 16:
+        raise ValueError(f"Number of input channels ({parser_args.in_channels})"
+                         f" must be within (0, 16)")
+    else:
+        logger.info(f"Images will be loaded with {parser_args.in_channels} "
+                    f"channel{'s' if parser_args.in_channels != 1 else ''}")
+
     return parser_args
 
 
@@ -207,7 +227,6 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Helper function to plot scores
-    # TODO: Use subplots
     def metric_plot(scores, name):
         plt.figure(figsize=(15, 5))
         plt.plot(range(len(scores["train"])),

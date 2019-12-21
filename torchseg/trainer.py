@@ -120,6 +120,7 @@ class Trainer(object):
                 phase=phase,
                 batch_size=self.batch_size[phase],
                 num_workers=self.num_workers,
+                cli_args=args
             )
             for phase in self.phases
         }
