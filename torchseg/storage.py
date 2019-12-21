@@ -22,9 +22,9 @@ class Meter(object):
                  phases: Tuple[str, ...] = ('train', 'val'),
                  scores: Tuple[str, ...] = ('loss', 'iou')):
 
-        self.phases: Tuple[str] = phases
+        self.phases: Tuple[str, ...] = phases
         self.current_phase: str = 'train'
-        self.scores: Tuple[str] = scores
+        self.scores: Tuple[str, ...] = scores
         self.store: Dict[str, Dict[str, List[float]]] = {
             score: {
                 phase: [] for phase in self.phases
@@ -45,7 +45,7 @@ class Meter(object):
                        current_phase: str,):
 
         # Log epoch, phase and start time
-        self.epoch_start_time = datetime.now()
+        self.epoch_start_time: datetime = datetime.now()
         logger = logging.getLogger(__name__)
         logger.info(f"Starting epoch: {current_epoch} | phase: {current_phase} | "
                     f"@ {datetime.strftime(self.epoch_start_time, '%I:%M:%S %p')}")
@@ -56,7 +56,7 @@ class Meter(object):
         }
 
         # For later
-        self.current_phase = current_phase
+        self.current_phase: str = current_phase
 
     def on_batch_begin(self):
         pass
@@ -102,7 +102,7 @@ class Meter(object):
         delta_t: timedelta = epoch_end_time - self.epoch_start_time
 
         # Construct string for logging
-        metric_string = f""
+        metric_string: str = f""
         for metric_name, metric_value in self.metrics.items():
             metric_string += f"{metric_name}: {metric_value:.4f} | "
         metric_string += f"in {delta_t.seconds}s"
