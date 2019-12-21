@@ -1,8 +1,9 @@
 # Torch-Seg
 
-A simple, flexible & bare-bones PyTorch pipeline for segmentation
-
+<img src="https://img.shields.io/github/v/tag/rshwndsz/torch-seg?include_prereleases&label=version"></img> 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/10QGnghYxi0h4oMQ0JcSt_FAX8Ez0VTTe)
+
+A simple, flexible & bare-bones PyTorch pipeline for segmentation
 
 ## Installation
 
