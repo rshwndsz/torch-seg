@@ -42,12 +42,15 @@ class OrganDataset(Dataset):
         logger.info(f"Creating {phase} dataset")
 
         # Root folder of the dataset
-        assert os.path.isdir(data_folder), "{} is not a directory or it doesn't exist.".format(data_folder)
+        if not os.path.isdir(data_folder):
+            raise NotADirectoryError(f"{data_folder} is not a directory or "
+                                     f"it doesn't exist.")
         logger.info(f"Datafolder: {data_folder}")
         self.root = data_folder
 
         # Phase of learning
-        assert phase in ['train', 'val'], "Provide any one of ['train', 'val'] as phase."
+        if phase not in ['train', 'val']:
+            raise ValueError("Provide any one of ['train', 'val'] as phase.")
         logger.info(f"Phase: {phase}")
         self.phase = phase
 
@@ -62,16 +65,24 @@ class OrganDataset(Dataset):
         logger.info(f"Found {len(self.image_names)} images in {_path_to_imgs}")
 
         # Number of classes in the segmentation target
-        assert num_classes >= 2, "Number of classes must be >= 2. 2: Binary, >2: Multi-class"
-        assert isinstance(num_classes, int), "Number of classes must be an integer."
+        if not isinstance(num_classes, int):
+            raise TypeError("Number of classes must be an integer.")
+        if not num_classes >= 2:
+            raise ValueError(f"Number of classes must be >= 2. "
+                             f"2: Binary, >2: Multi-class")
         self.num_classes = num_classes
 
-        # Dictionary specifying the mapping between pixel values [0, 255] and class indices [0, C-1]
-        assert len(class_dict) == num_classes, "Length of class dict must be same as number of classes."
-        assert max(class_dict) == 255, f"Max intensity of grayscale images is 255, " \
-                                       f"but class dict: {class_dict} specifies otherwise"
-        assert min(class_dict) == 0, f"Min intensity of grayscale images is 0, " \
-                                     f"but class dict: {class_dict} specifies otherwise"
+        # Dictionary specifying the mapping
+        # between pixel values [0, 255] and class indices [0, C-1]
+        if not len(class_dict) == num_classes:
+            raise ValueError(f"Length of class dict must be same "
+                             f"as number of classes.")
+        if not max(class_dict) == 255:
+            raise ValueError(f"Max intensity of grayscale images is 255, but "
+                             f"class dict: {class_dict} specifies otherwise")
+        if not min(class_dict) == 0:
+            raise ValueError(f"Min intensity of grayscale images is 0, but "
+                             f"class dict: {class_dict} specifies otherwise")
         self.class_dict = class_dict
 
     def __getitem__(self, idx: int):
@@ -79,26 +90,29 @@ class OrganDataset(Dataset):
         image_name = self.image_names[idx]
         image_path = os.path.join(self.root, self.phase, "imgs", image_name)
         image = cv2.imread(image_path)
-        assert image.size != 0, "cv2: Unable to load image - {}".format(image_path)
+        if image.size == 0:
+            raise IOError(f"cv2: Unable to load image - {image_path}")
 
         # Load mask
         mask_name = image_name
         mask_path = os.path.join(self.root, self.phase, "masks", mask_name)
-        # Expect mask to have values in the [0, 255] region corresponding to each class
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)  # <<<< Note: Hardcoded reading in Grayscale
-        assert mask.size != 0, "cv2: Unable to load mask - {}".format(mask_path)
+        # Expect mask to have values in [0, C-1] where C => Number of classes
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask.size == 0:
+            raise IOError(f"cv2: Unable to load mask - {mask_path}")
 
         # TODO: Improve this spaghetti (ノಠ益ಠ)ノ彡┻━┻
         # Data Augmentation for image and mask
         augmented = self.transforms['aug'](image=image, mask=mask)
         new_image = self.transforms['img_only'](image=augmented['image'])
         new_mask = self.transforms['mask_only'](image=augmented['mask'])
-        aug_tensors = self.transforms['final'](image=new_image['image'], mask=new_mask['image'])
+        aug_tensors = self.transforms['final'](image=new_image['image'],
+                                               mask=new_mask['image'])
         image = aug_tensors['image']
         mask = aug_tensors['mask']
 
         if self.num_classes == 2:
-            mask = torch.unsqueeze(mask, dim=0)  # For [1, H, W] instead of [H, W]
+            mask = torch.unsqueeze(mask, dim=0)  # [H, W] => [H, W]
         return image, mask
 
     def __len__(self):
@@ -136,7 +150,8 @@ class OrganDataset(Dataset):
             aug_transforms.extend([
                 tf.RandomBrightnessContrast(p=0.5),
                 tf.ElasticTransform(p=0.5),
-                tf.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True, p=0.2),
+                tf.MultiplicativeNoise(multiplier=(0.5, 1.5),
+                                       per_channel=True, p=0.2),
             ])
         aug_transforms.extend([
             tf.RandomSizedCrop(min_max_height=(256, 256),
@@ -152,7 +167,8 @@ class OrganDataset(Dataset):
             tf.Normalize(mean=0, std=1, always_apply=True)
         ])
         image_only_transforms = Compose([
-            tf.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), always_apply=True)
+            tf.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0),
+                         always_apply=True)
         ])
         final_transforms = Compose([
             ToTensorV2()
