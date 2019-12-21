@@ -38,7 +38,8 @@ C_LOGGING = {
     'formatters': {
         'colored_console': {
             '()': 'coloredlogs.ColoredFormatter',
-            'format': "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            'format': "%(asctime)s - %(name)-18s - %(levelname)-8s"
+                      " - %(message)s",
             'datefmt': '%H:%M:%S'},
         'format_for_file': {
             'format': "%(asctime)s :: %(levelname)s :: %(funcName)s in "
@@ -137,8 +138,8 @@ def cli():
     test_checkpoint_path: str = os.path.join("torchseg", "checkpoints",
                                              parser_args.checkpoint_name)
     if not os.path.exists(test_checkpoint_path):
-        raise FileNotFoundError("The checkpoints file at {} was not found."
-                                "Check the name again."
+        raise FileNotFoundError("The checkpoints file at {} was not found. "
+                                "Check if the file exists."
                                 .format(test_checkpoint_path))
     else:
         logger.info(f"Loading checkpoint file: {test_checkpoint_path}")

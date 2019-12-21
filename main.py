@@ -17,43 +17,6 @@ from torchseg.trainer import Trainer
 
 _DIRNAME = os.path.dirname(__file__)
 
-# Bland
-LOGGING_CONFIG = {
-    'version': 1,
-    'disable_existing_loggers': True,
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-            'datefmt': '%H:%M:%S'
-        },
-    },
-    'handlers': {
-        'default': {
-            'level': 'DEBUG',
-            'formatter': 'standard',
-            'class': 'logging.StreamHandler',
-            'stream': 'ext://sys.stdout',  # Default is stderr
-        },
-    },
-    'loggers': {
-        '': {  # root logger
-            'handlers': ['default'],
-            'level': 'DEBUG',
-            'propagate': False
-        },
-        'torchseg': {
-            'handlers': ['default'],
-            'level': 'DEBUG',
-            'propagate': False
-        },
-        '__main__': {  # if __name__ == '__main__'
-            'handlers': ['default'],
-            'level': 'DEBUG',
-            'propagate': False
-        },
-    }
-}
-
 # Colourful 🌈
 C_LOGGING = {
     'version': 1,
@@ -67,7 +30,8 @@ C_LOGGING = {
     'formatters': {
         'colored_console': {
             '()': 'coloredlogs.ColoredFormatter',
-            'format': "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            'format': "%(asctime)s - %(name)-18s - %(levelname)-8s"
+                      " - %(message)s",
             'datefmt': '%H:%M:%S'},
         'format_for_file': {
             'format': "%(asctime)s :: %(levelname)s :: %(funcName)s in "

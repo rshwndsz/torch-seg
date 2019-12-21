@@ -4,15 +4,17 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-def dice_loss(logits: torch.Tensor,
-              target: torch.Tensor,
-              smooth: float = 1e-7) -> torch.Tensor:
+class DiceLoss(nn.Module):
     # See: https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-    probs = torch.sigmoid(logits)
-    iflat = probs.view(-1)
-    tflat = target.view(-1)
-    intersection = (iflat * tflat).sum()
-    return (2.0 * intersection + smooth) / (iflat.sum() + tflat.sum() + smooth)
+    def forward(self,
+                logits: torch.Tensor, target: torch.Tensor,
+                smooth: float = 1e-7) -> torch.Tensor:
+        probs = torch.sigmoid(logits)
+        iflat = probs.view(-1)
+        tflat = target.view(-1)
+        intersection = (iflat * tflat).sum()
+        return ((2.0 * intersection + smooth) /
+                (iflat.sum() + tflat.sum() + smooth))
 
 
 class FocalLoss(nn.Module):
@@ -40,11 +42,13 @@ class MixedLoss(nn.Module):
     def __init__(self, alpha, gamma):
         super().__init__()
         self.alpha = alpha
-        self.focal = FocalLoss(gamma)
+        self.focal_loss = FocalLoss(gamma)
+        self.dice_loss = DiceLoss()
 
     def forward(self,
                 logits: torch.Tensor,
                 target: torch.Tensor) -> torch.Tensor:
-        loss = (self.alpha * self.focal(logits, target) -
-                torch.log(dice_loss(logits, target)))
+        loss = (self.alpha * self.focal_loss(logits, target) -
+                torch.log(self.dice_loss(logits, target)))
+
         return loss.mean()

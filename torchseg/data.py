@@ -13,8 +13,8 @@ from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
 
 # Root folder of dataset
-dirname: str = os.path.dirname(__file__)
-DATA_FOLDER: str = os.path.join(dirname, "dataset/raw/")
+_DIRNAME: str = os.path.dirname(__file__)
+DATA_FOLDER: str = os.path.join(_DIRNAME, "dataset/raw/")
 
 
 # TODO: Generalize binary segmentation to multiclass segmentation
