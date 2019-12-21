@@ -25,8 +25,8 @@ class FocalLoss(nn.Module):
                 logits: torch.Tensor,
                 target: torch.Tensor) -> torch.Tensor:
         if not (target.size() == logits.size()):
-            raise ValueError("Target size ({}) must be the same as input size ({})"
-                             .format(target.size(), logits.size()))
+            raise ValueError(f"Target size ({target.size()}) must be the same "
+                             f"as input size ({logits.size()})")
         max_val = (-logits).clamp(min=0)
         loss = logits - logits * target + max_val + \
             ((-max_val).exp() + (-logits - max_val).exp()).log()
@@ -45,5 +45,6 @@ class MixedLoss(nn.Module):
     def forward(self,
                 logits: torch.Tensor,
                 target: torch.Tensor) -> torch.Tensor:
-        loss = self.alpha * self.focal(logits, target) - torch.log(dice_loss(logits, target))
+        loss = (self.alpha * self.focal(logits, target) -
+                torch.log(dice_loss(logits, target)))
         return loss.mean()

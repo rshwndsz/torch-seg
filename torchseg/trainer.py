@@ -72,10 +72,10 @@ class Trainer(object):
         """
 
         # Set hyperparameters
-        self.num_workers: int = args.num_workers  # Raise this if shared memory is high
+        self.num_workers: int = args.num_workers
         self.batch_size: Dict[str, int] = {"train": args.batch_size,
                                            "val": args.batch_size}
-        self.lr: float = args.lr  # See: https://twitter.com/karpathy/status/801621764144971776?lang=en
+        self.lr: float = args.lr
         self.num_epochs: int = args.num_epochs
         self.current_epoch: int = 0
         self.phases: Tuple[str, ...] = ("train", "val")
@@ -101,10 +101,11 @@ class Trainer(object):
 
         # Model, loss, optimizer & scheduler
         self.net = model
-        self.net = self.net.to(self.device)  # <<<< Catch: https://pytorch.org/docs/stable/optim.html
+        # <<<< Catch: https://pytorch.org/docs/stable/optim.html
+        self.net = self.net.to(self.device)
         self.criterion = MixedLoss(9.0, 4.0)
         self.optimizer = optim.Adam(self.net.parameters(),
-                                    lr=self.lr)  # "Adam is safe" - http://karpathy.github.io/2019/04/25/recipe/
+                                    lr=self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, mode="min",
                                            patience=3, verbose=True,
                                            cooldown=0, min_lr=3e-6)
@@ -124,12 +125,9 @@ class Trainer(object):
         }
 
         # Initialize losses & scores
-        self.best_loss: float = float("inf")  # Very high best_loss for the first iteration
-        # TODO: Add all scores
-        # self.meter = Meter(self.phases, scores=('loss', 'iou', 'dice',
-        #                                         'dice_2', 'aji', 'prec',
-        #                                         'pq', 'sq', 'dq'))
-        self.meter = Meter(self.phases, scores=('loss', 'iou', 'dice', 'acc', 'prec'))
+        self.best_loss: float = float("inf")  # Very high
+        self.meter = Meter(self.phases, scores=('loss', 'iou', 'dice',
+                                                'acc', 'prec'))
 
     def forward(self,
                 images: torch.Tensor,
@@ -179,7 +177,6 @@ class Trainer(object):
         # Set model & dataloader based on phase
         self.net.train(phase == "train")
         dataloader = self.dataloaders[phase]
-        total_batches: int = len(dataloader)
 
         # ===ON_EPOCH_BEGIN===
         self.meter.on_epoch_begin(epoch, phase)
@@ -228,7 +225,8 @@ class Trainer(object):
         # ===ON_TRAIN_BEGIN===
         self.meter.on_train_begin()
 
-        for epoch in range(1, self.num_epochs + 1):    # <<< Change: Hardcoded starting epoch
+        # <<< Change: Hardcoded starting epoch
+        for epoch in range(1, self.num_epochs + 1):
             # Update current_epoch
             self.current_epoch: int = epoch
 
@@ -252,15 +250,16 @@ class Trainer(object):
 
                 # TODO: Add EarlyStopping
 
-                # Save model if validation loss is lesser than anything seen before
+                # Save model if val loss is lesser than anything seen before
                 if val_loss < self.best_loss:
                     logger = logging.getLogger(__name__)
-                    logger.info("******** New optimal found, saving state ********")
+                    logger.info("****** New optimal found, saving state ******")
                     state["best_loss"] = self.best_loss = val_loss
                     try:
                         torch.save(state, self.save_path)
                     except FileNotFoundError:
-                        logger.exception(f"Error while saving checkpoint", exc_info=True)
+                        logger.exception(f"Error while saving checkpoint",
+                                         exc_info=True)
 
             # Print newline
             print()
