@@ -1,7 +1,9 @@
 # Python STL
 import os
+import sys
 import argparse
 import logging
+from logging.config import dictConfig
 from typing import List
 # Data Science
 import matplotlib.pyplot as plt
@@ -14,12 +16,55 @@ from torch.utils.data import Dataset
 from albumentations.augmentations import transforms as tf
 from albumentations.core.composition import Compose
 from albumentations.pytorch import ToTensorV2
+# Fancy logs
+import coloredlogs
 
 # Local
 from torchseg.data import DATA_FOLDER
 from torchseg.model import model
 
 _DIRNAME = os.path.dirname(__file__)
+
+# Colourful 🌈
+C_LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'loggers': {
+        '': {
+           'level': 'DEBUG',
+           'handlers': ['console']
+        },
+    },
+    'formatters': {
+        'colored_console': {
+            '()': 'coloredlogs.ColoredFormatter',
+            'format': "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            'datefmt': '%H:%M:%S'},
+        'format_for_file': {
+            'format': "%(asctime)s :: %(levelname)s :: %(funcName)s in "
+                      "%(filename)s (l:%(lineno)d) :: %(message)s",
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'colored_console',
+            'stream': 'ext://sys.stdout'
+        },
+    },
+}
+
+# Load logging configuration (C_LOGGING => colour, LOGGING_CONFIG => plain)
+dictConfig(C_LOGGING)
+
+# Create logger
+logger = logging.getLogger(__name__)
+# Add colour
+coloredlogs.install(fmt=C_LOGGING['formatters']['colored_console']['format'],
+                    stream=sys.stdout,
+                    level='DEBUG', logger=logger)
 
 
 class TestDataset(Dataset):
@@ -34,25 +79,42 @@ class TestDataset(Dataset):
     transform : albumentations.core.composition.Compose
         Albumentations augmentations pipeline
     """
-    def __init__(self, data_folder):
+    def __init__(self, data_folder, cli_args):
+        self.cli_args = cli_args
         self.root: str = data_folder
         self.image_names: List[str] = sorted(os.listdir(os.path.join(self.root,
                                                                      "test",
                                                                      "imgs")))
         self.transform = Compose(
             [
+                # Normalize images to [0..1]
                 tf.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), p=1),
-                tf.Resize(256, 256),
+                # Resize images to (image_size, image_size)
+                tf.Resize(cli_args.image_size, cli_args.image_size),
+                # Convert PIL images to torch.Tensor
                 ToTensorV2(),
             ]
         )
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        # Get image name from list of image names
         image_name: str = self.image_names[idx]
+        # Construct path to image
         image_path: str = os.path.join(self.root, "test", "imgs", image_name)
-        image = cv2.imread(image_path)
-        images = self.transform(image=image)["image"]
-        return images
+        # Read image with opencv
+        if self.cli_args.in_channels == 1:
+            image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        else:
+            image = cv2.imread(image_path)
+
+        # Check if image has been read properly
+        if image.size == 0:
+            raise IOError(f"cv2: Unable to load image - {image_path}")
+
+        # Augment image
+        image = self.transform(image=image)["image"]
+        # Return augmented image as a tensor
+        return image
 
     def __len__(self):
         return len(self.image_names)
@@ -61,8 +123,13 @@ class TestDataset(Dataset):
 def cli():
     parser = argparse.ArgumentParser(description='Torchseg')
     parser.add_argument('-c', '--checkpoint', dest='checkpoint_name', type=str,
-                        default="model.pth",
+                        default="model-saved.pth",
                         help='Name of checkpoint file in torchseg/checkpoints/')
+    parser.add_argument('--image_size', dest='image_size', type=int,
+                        default=256, help='Resize images to size: s*s')
+    parser.add_argument('--in_channels', dest='in_channels', type=int,
+                        default=3,
+                        help='Number of channels in input image')
 
     parser_args = parser.parse_args()
 
@@ -72,23 +139,33 @@ def cli():
     if not os.path.exists(test_checkpoint_path):
         raise FileNotFoundError("The checkpoints file at {} was not found."
                                 "Check the name again."
-                                .format(checkpoint_path))
+                                .format(test_checkpoint_path))
     else:
-        logger.info(f"Loading checkpoint file: {checkpoint_path}")
+        logger.info(f"Loading checkpoint file: {test_checkpoint_path}")
+
+    if not parser_args.image_size > 0:
+        raise ValueError("Image size must be a positive non-zero integer.")
+    else:
+        logger.info(f"Images will be resized to "
+                    f"({parser_args.image_size}, {parser_args.image_size})")
+
+    if not parser_args.in_channels > 0 and parser_args.in_channels < 16:
+        raise ValueError(f"Number of input channels ({parser_args.in_channels})"
+                         f" must be within (0, 16)")
+    else:
+        logger.info(f"Images will be loaded with {parser_args.in_channels} "
+                    f"channel{'s' if parser_args.in_channels != 1 else ''}")
 
     return parser_args
 
 
-# TODO: Write code for overlapping window evaluation (replace downsampling)
 if __name__ == "__main__":
-    # Get logger
-    logger = logging.getLogger(__name__)
 
     # Parse CLI arguments
     args = cli()
 
     # Get test dataset
-    testset = TestDataset(DATA_FOLDER)
+    testset = TestDataset(DATA_FOLDER, args)
 
     # Set device
     if torch.cuda.is_available():
