@@ -1,5 +1,10 @@
 name: torchseg-env
 dependencies:
   - python=3.6
+  - pytorch=1.1
+  - cudatoolkit=10.0
   - numpy
   - matplotlib
+  - Pip:
+      - coloredlogs
+      - segmentation-models-pytorch
